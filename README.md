@@ -140,8 +140,9 @@ moments, for example raising the flow temperature, is up to you: the integration
 says when.
 
 The 60.5 minute trigger is measured on one unit, which is why the option is off by
-default. A measurement interval of 10 s or less detects the pulse reliably; at 30 s the
-ramp, about 50 s long, can be seen only once or twice.
+default. Replaying 48 recorded hours (31 pulses) at different polling intervals found
+all 31 at 10, 20 and 30 s, and 24 of 31 at 60 s: the warning before the pulse does not
+depend on the interval, the "after" trigger needs at least one poll during the ramp.
 
 ## Troubleshooting
 
