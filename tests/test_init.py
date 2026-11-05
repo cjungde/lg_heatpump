@@ -1,12 +1,18 @@
 """Tests for the LG Heat Pump config-entry setup."""
 
+from datetime import timedelta
 from unittest.mock import patch
 
 from modbus_connection import IllegalDataAddressError, ModbusTimeoutError
 from modbus_connection.mock import MockModbusConnection
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.lg_heatpump.const import CONF_MODEL, CONF_UNIT_ID, DOMAIN
+from custom_components.lg_heatpump.const import (
+    CONF_MODEL,
+    CONF_SCAN_INTERVAL,
+    CONF_UNIT_ID,
+    DOMAIN,
+)
 from custom_components.lg_heatpump.diagnostics import async_get_config_entry_diagnostics
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
@@ -262,3 +268,30 @@ async def test_diagnostics_include_the_raw_register_map(
     assert diagnostics["raw"]["input"][12] == 0x10000 - 42
     assert diagnostics["raw"]["holding"][8] == 500
     assert diagnostics["values"]["sensors"]["outdoor_temperature"] == -4.2
+
+
+async def test_default_scan_interval_is_unchanged(
+    init_integration: MockConfigEntry,
+) -> None:
+    """Without the option: readings every 10 s, settings every 60 s."""
+    runtime = init_integration.runtime_data
+    assert runtime.readings.update_interval == timedelta(seconds=10)
+    assert runtime.settings.update_interval == timedelta(seconds=60)
+
+
+async def test_scan_interval_option_applies_to_the_readings_only(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    patched_connection: None,
+) -> None:
+    """The chosen interval drives the measurements, not the rarely changing settings."""
+    mock_config_entry.add_to_hass(hass)
+    hass.config_entries.async_update_entry(
+        mock_config_entry, options={CONF_SCAN_INTERVAL: 10}
+    )
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+    runtime = mock_config_entry.runtime_data
+    assert runtime.readings.update_interval == timedelta(seconds=10)
+    assert runtime.settings.update_interval == timedelta(seconds=60)
