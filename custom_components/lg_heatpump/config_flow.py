@@ -31,13 +31,18 @@ from homeassistant.helpers.selector import (
 from .connection import create_modbus_params
 from .const import (
     CONF_DEBUG,
+    CONF_FLUSH_PULSE,
+    CONF_FLUSH_PULSE_LEAD,
     CONF_MODEL,
     CONF_SCAN_INTERVAL,
     CONF_UNIT_ID,
+    DEFAULT_FLUSH_PULSE_LEAD,
     DEFAULT_PORT,
     DEFAULT_UNIT_ID,
     DOMAIN,
+    MAX_FLUSH_PULSE_LEAD,
     MAX_SCAN_INTERVAL,
+    MIN_FLUSH_PULSE_LEAD,
     MIN_SCAN_INTERVAL,
     SCAN_INTERVAL,
 )
@@ -96,13 +101,13 @@ async def _async_probe(hass: HomeAssistant, data: dict[str, Any]) -> LgHeatPump:
 
 
 class LgHeatPumpOptionsFlow(OptionsFlowWithReload):
-    """Let the user tune how often the measurements are polled."""
+    """Let the user tune the polling and switch on the flush pulse triggers."""
 
     async def async_step_init(
         self,
         user_input: dict[str, Any] | None = None,
     ) -> ConfigFlowResult:
-        """Choose the measurement interval; the entry reloads to apply it."""
+        """Choose the measurement interval and the flush pulse tracker."""
         if user_input is not None:
             return self.async_create_entry(data=user_input)
 
@@ -120,6 +125,23 @@ class LgHeatPumpOptionsFlow(OptionsFlowWithReload):
                                     mode=NumberSelectorMode.BOX,
                                     min=MIN_SCAN_INTERVAL,
                                     max=MAX_SCAN_INTERVAL,
+                                    unit_of_measurement="s",
+                                )
+                            ),
+                            vol.Coerce(int),
+                        ),
+                        vol.Required(
+                            CONF_FLUSH_PULSE, default=False
+                        ): BooleanSelector(),
+                        vol.Required(
+                            CONF_FLUSH_PULSE_LEAD,
+                            default=DEFAULT_FLUSH_PULSE_LEAD,
+                        ): vol.All(
+                            NumberSelector(
+                                NumberSelectorConfig(
+                                    mode=NumberSelectorMode.BOX,
+                                    min=MIN_FLUSH_PULSE_LEAD,
+                                    max=MAX_FLUSH_PULSE_LEAD,
                                     unit_of_measurement="s",
                                 )
                             ),

@@ -18,8 +18,9 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util.dt import utcnow
 
-from .const import DOMAIN, LOGGER, MANUFACTURER
+from .const import DOMAIN, EVENT_FLUSH_PULSE, LOGGER, MANUFACTURER
 from .lg_heatpump_modbus import SETTING_COMPONENTS, UpdateReport
+from .lg_heatpump_modbus.logic import EVENT_FINISHED, EVENT_IMMINENT, FlushPulseTracker
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -61,6 +62,8 @@ class LgHeatPumpCoordinator(DataUpdateCoordinator[UpdateReport]):
         self.device = device
         self._poll = poll
         self._consecutive_failures: dict[str, int] = {}
+        self.flush_pulse: FlushPulseTracker | None = None
+        """Follows the flush pulse; set by the setup when the option is on."""
         self.last_poll_time: datetime | None = None
         """When the last poll finished, whether it succeeded or not."""
 
@@ -103,7 +106,61 @@ class LgHeatPumpCoordinator(DataUpdateCoordinator[UpdateReport]):
                 "no sub-system answered", list(report.failed.values())
             )
         self._log_transitions(report)
+        if self.flush_pulse is not None:
+            self._track_flush_pulse()
         return report
+
+    def _track_flush_pulse(self) -> None:
+        """Feed the tracker one observation and fire what the poll caused.
+
+        The events go out before the entities see the new data: a warning is only
+        useful while there is still time to act on it. A poll in which the
+        compressor speed could not be read passes ``None`` and is skipped by the
+        tracker, which is not the same as a compressor stop.
+        """
+        tracker = self.flush_pulse
+        device = self.device
+        events = tracker.update(
+            utcnow(),
+            device.sensors.compressor_speed,
+            defrosting=bool(device.states.defrosting),
+            dhw_heating=bool(device.states.dhw_heating),
+        )
+        for event_type in events:
+            if event_type not in (EVENT_IMMINENT, EVENT_FINISHED):
+                continue  # only "before" and "after" are offered
+            record = tracker.last_pulse if event_type == EVENT_FINISHED else None
+            expected = tracker.expected_at()
+            self.hass.bus.async_fire(
+                EVENT_FLUSH_PULSE,
+                {
+                    "type": event_type,
+                    "device_id": self._device_id(),
+                    "entry_id": self.config_entry.entry_id,
+                    "runtime_minutes": (
+                        record.runtime_minutes if record else tracker.runtime_minutes
+                    ),
+                    "expected_at": expected.isoformat() if expected else None,
+                    "peak_rpm": record.peak_rpm if record else None,
+                    "duration_seconds": (
+                        round(record.duration_seconds, 1) if record else None
+                    ),
+                },
+            )
+            LOGGER.info(
+                "%s: flush pulse %s (running time %s min)",
+                self.name,
+                event_type,
+                record.runtime_minutes if record else tracker.runtime_minutes,
+            )
+
+    def _device_id(self) -> str | None:
+        """Return the device registry id the device triggers filter on."""
+        entry_id = self.config_entry.entry_id
+        device = dr.async_get(self.hass).async_get_device_by_identifier(
+            (DOMAIN, entry_id), entry_id
+        )
+        return device.id if device else None
 
     def _log_transitions(self, report: UpdateReport) -> None:
         """Log a sub-system going quiet once, and log it coming back."""

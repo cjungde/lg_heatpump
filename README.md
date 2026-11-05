@@ -121,6 +121,28 @@ The integration therefore asks the shared link for a request timeout of at least
 `modbus-connection` 4.12.3, shipped with Home Assistant 2026.10; on 2026.9 the
 library default of 10 s stays in place.
 
+### Options
+
+**Configure** on the integration offers:
+
+- **Measurement interval** (5 to 600 s, default 10 s). A longer interval loads a Modbus
+  link that other devices may share less, but can miss short events such as a flush pulse.
+- **Flush pulse detection** (off by default) and **warning before a flush pulse**
+  (30 to 600 s, default 180 s). See below.
+
+### Flush pulse triggers
+
+Every so often the unit runs the compressor up to 60 Hz for about a minute to return
+oil, after 60.5 minutes of uninterrupted running at or below 25 Hz. With the option on,
+the integration offers two device triggers, **Before a flush pulse** (the warning lead
+time before it) and **After a flush pulse**, for use in automations. What to do at those
+moments, for example raising the flow temperature, is up to you: the integration only
+says when.
+
+The 60.5 minute trigger is measured on one unit, which is why the option is off by
+default. A measurement interval of 10 s or less detects the pulse reliably; at 30 s the
+ramp, about 50 s long, can be seen only once or twice.
+
 ## Troubleshooting
 
 **The entry never finishes setting up.** The heat pump is not answering. Check
