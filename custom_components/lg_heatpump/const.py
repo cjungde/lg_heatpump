@@ -13,8 +13,8 @@ CONF_UNIT_ID: Final = "unit_id"
 CONF_MODEL: Final = "model"
 CONF_DEBUG: Final = "debug"
 CONF_SCAN_INTERVAL: Final = "scan_interval"
-CONF_FLUSH_PULSE: Final = "flush_pulse"
-CONF_FLUSH_PULSE_LEAD: Final = "flush_pulse_lead_seconds"
+CONF_ORP: Final = "oil_return_pulse"
+CONF_ORP_LEAD: Final = "oil_return_pulse_lead_seconds"
 
 DEFAULT_PORT: Final = 502
 DEFAULT_UNIT_ID: Final = 1
@@ -28,15 +28,15 @@ SCAN_INTERVAL: Final = timedelta(seconds=10)
 MIN_SCAN_INTERVAL: Final = 5
 MAX_SCAN_INTERVAL: Final = 600
 
-# The oil-return flush pulse: the tracker is off unless asked for, because the
+# The oil return pulse (ORP): the tracker is off unless asked for, because the
 # 60.5 minute trigger is measured on one unit. The warning goes out this long
 # before the pulse; the ramp itself (about 50 s) is too short to act on.
-DEFAULT_FLUSH_PULSE_LEAD: Final = 180
-MIN_FLUSH_PULSE_LEAD: Final = 30
-MAX_FLUSH_PULSE_LEAD: Final = 600
+DEFAULT_ORP_LEAD: Final = 180
+MIN_ORP_LEAD: Final = 30
+MAX_ORP_LEAD: Final = 600
 
 # One bus event carries both device triggers, told apart by its ``type``.
-EVENT_FLUSH_PULSE: Final = f"{DOMAIN}_event"
+EVENT_ORP: Final = f"{DOMAIN}_event"
 SETTINGS_SCAN_INTERVAL: Final = timedelta(seconds=60)
 
 # Per-request timeout floor, in seconds, asked of the shared Modbus link.

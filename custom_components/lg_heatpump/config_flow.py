@@ -31,18 +31,18 @@ from homeassistant.helpers.selector import (
 from .connection import create_modbus_params
 from .const import (
     CONF_DEBUG,
-    CONF_FLUSH_PULSE,
-    CONF_FLUSH_PULSE_LEAD,
     CONF_MODEL,
+    CONF_ORP,
+    CONF_ORP_LEAD,
     CONF_SCAN_INTERVAL,
     CONF_UNIT_ID,
-    DEFAULT_FLUSH_PULSE_LEAD,
+    DEFAULT_ORP_LEAD,
     DEFAULT_PORT,
     DEFAULT_UNIT_ID,
     DOMAIN,
-    MAX_FLUSH_PULSE_LEAD,
+    MAX_ORP_LEAD,
     MAX_SCAN_INTERVAL,
-    MIN_FLUSH_PULSE_LEAD,
+    MIN_ORP_LEAD,
     MIN_SCAN_INTERVAL,
     SCAN_INTERVAL,
 )
@@ -101,13 +101,13 @@ async def _async_probe(hass: HomeAssistant, data: dict[str, Any]) -> LgHeatPump:
 
 
 class LgHeatPumpOptionsFlow(OptionsFlowWithReload):
-    """Let the user tune the polling and switch on the flush pulse triggers."""
+    """Let the user tune the polling and switch on the ORP triggers."""
 
     async def async_step_init(
         self,
         user_input: dict[str, Any] | None = None,
     ) -> ConfigFlowResult:
-        """Choose the measurement interval and the flush pulse tracker."""
+        """Choose the measurement interval and the ORP tracker."""
         if user_input is not None:
             return self.async_create_entry(data=user_input)
 
@@ -130,18 +130,16 @@ class LgHeatPumpOptionsFlow(OptionsFlowWithReload):
                             ),
                             vol.Coerce(int),
                         ),
+                        vol.Required(CONF_ORP, default=False): BooleanSelector(),
                         vol.Required(
-                            CONF_FLUSH_PULSE, default=False
-                        ): BooleanSelector(),
-                        vol.Required(
-                            CONF_FLUSH_PULSE_LEAD,
-                            default=DEFAULT_FLUSH_PULSE_LEAD,
+                            CONF_ORP_LEAD,
+                            default=DEFAULT_ORP_LEAD,
                         ): vol.All(
                             NumberSelector(
                                 NumberSelectorConfig(
                                     mode=NumberSelectorMode.BOX,
-                                    min=MIN_FLUSH_PULSE_LEAD,
-                                    max=MAX_FLUSH_PULSE_LEAD,
+                                    min=MIN_ORP_LEAD,
+                                    max=MAX_ORP_LEAD,
                                     unit_of_measurement="s",
                                 )
                             ),

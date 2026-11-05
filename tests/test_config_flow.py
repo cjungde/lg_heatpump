@@ -12,9 +12,9 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.lg_heatpump.const import (
     CONF_DEBUG,
-    CONF_FLUSH_PULSE,
-    CONF_FLUSH_PULSE_LEAD,
     CONF_MODEL,
+    CONF_ORP,
+    CONF_ORP_LEAD,
     CONF_SCAN_INTERVAL,
     CONF_UNIT_ID,
     DOMAIN,
@@ -178,8 +178,8 @@ async def test_options_flow_sets_the_scan_interval(
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert init_integration.options == {
         CONF_SCAN_INTERVAL: 10,
-        CONF_FLUSH_PULSE: False,
-        CONF_FLUSH_PULSE_LEAD: 180,
+        CONF_ORP: False,
+        CONF_ORP_LEAD: 180,
     }
     assert init_integration.runtime_data.readings.update_interval == timedelta(
         seconds=10

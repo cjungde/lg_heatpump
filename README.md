@@ -126,16 +126,17 @@ library default of 10 s stays in place.
 **Configure** on the integration offers:
 
 - **Measurement interval** (5 to 600 s, default 10 s). A longer interval loads a Modbus
-  link that other devices may share less, but can miss short events such as a flush pulse.
-- **Flush pulse detection** (off by default) and **warning before a flush pulse**
+  link that other devices may share less, but can miss short events such as an ORP.
+- **Oil return pulse (ORP) detection** (off by default) and **warning before an ORP**
   (30 to 600 s, default 180 s). See below.
 
-### Flush pulse triggers
+### Oil return pulse (ORP) triggers
 
 Every so often the unit runs the compressor up to 60 Hz for about a minute to return
-oil, after 60.5 minutes of uninterrupted running at or below 25 Hz. With the option on,
-the integration offers two device triggers, **Before a flush pulse** (the warning lead
-time before it) and **After a flush pulse**, for use in automations. What to do at those
+oil, after 60.5 minutes of uninterrupted running at or below 25 Hz: the oil return
+pulse (ORP), also called flush pulse. With the option on, the integration offers two
+device triggers, **Before an ORP** (the warning lead time before it) and **After an
+ORP**, for use in automations. What to do at those
 moments, for example raising the flow temperature, is up to you: the integration only
 says when. "After" also fires when an announced pulse did not come (the compressor
 stopped, defrosted or did not ramp); its event data then carries `completed: false`, so

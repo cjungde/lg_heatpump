@@ -1,16 +1,16 @@
-"""Device triggers for the oil-return flush pulse.
+"""Device triggers for the oil return pulse (ORP).
 
 Two of them, because they are the two moments an automation can do something
 about:
 
-* **before a flush pulse** -- the unit is about to end its heating run. Three
+* **before an ORP** -- the unit is about to end its heating run. Three
   minutes of warning by default, configurable in the integration's options.
   Long enough to write to the machine, which the 50-second ramp is not.
-* **after a flush pulse** -- the run has ended and the clock has restarted.
+* **after an ORP** -- the run has ended and the clock has restarted.
 
 What to do at those moments, for instance raising the flow temperature, is left
 to the user's automation. The integration only says when. They are offered only
-when the flush pulse option is on, because the tracker behind them is switched
+when the ORP option is on, because the tracker behind them is switched
 off by default.
 """
 
@@ -26,7 +26,7 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.trigger import TriggerActionType, TriggerInfo
 from homeassistant.helpers.typing import ConfigType
 
-from .const import CONF_FLUSH_PULSE, DOMAIN, EVENT_FLUSH_PULSE
+from .const import CONF_ORP, DOMAIN, EVENT_ORP
 from .lg_heatpump_modbus.logic import EVENT_FINISHED, EVENT_IMMINENT
 
 TRIGGER_TYPES = {EVENT_IMMINENT, EVENT_FINISHED}
@@ -46,7 +46,7 @@ async def async_get_triggers(
     enabled = any(
         (entry := hass.config_entries.async_get_entry(entry_id)) is not None
         and entry.domain == DOMAIN
-        and entry.options.get(CONF_FLUSH_PULSE, False)
+        and entry.options.get(CONF_ORP, False)
         for entry_id in registry_entry.config_entries
     )
     if not enabled:
@@ -72,7 +72,7 @@ async def async_attach_trigger(
     event_config = event_trigger.TRIGGER_SCHEMA(
         {
             event_trigger.CONF_PLATFORM: "event",
-            event_trigger.CONF_EVENT_TYPE: EVENT_FLUSH_PULSE,
+            event_trigger.CONF_EVENT_TYPE: EVENT_ORP,
             event_trigger.CONF_EVENT_DATA: {
                 CONF_DEVICE_ID: config[CONF_DEVICE_ID],
                 CONF_TYPE: config[CONF_TYPE],

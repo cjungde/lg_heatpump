@@ -278,21 +278,21 @@
       "init": {
         "data": {
           "scan_interval": "Messintervall",
-          "flush_pulse": "Spülpuls-Erkennung",
-          "flush_pulse_lead_seconds": "Wie früh der Trigger „Vor einem Spülpuls“ auslöst (Sekunden)"
+          "oil_return_pulse": "Erkennung Ölrückführungspuls (ORP)",
+          "oil_return_pulse_lead_seconds": "Wie früh der Trigger „Vor einem ORP“ auslöst (Sekunden)"
         },
         "data_description": {
-          "scan_interval": "Wie oft die Messwerte (Temperaturen, Durchfluss, Verdichter) gelesen werden, in Sekunden. Standard ist 10. Ein längeres Intervall belastet eine Modbus-Verbindung, die sich andere Geräte teilen können, weniger, kann aber kurze Ereignisse wie den Spülpuls des Verdichters verpassen.",
-          "flush_pulse": "Erkennt den Ölrückführungs-Spülpuls des Verdichters und bietet die Geräte-Trigger „Vor einem Spülpuls“ und „Nach einem Spülpuls“ an. Der Auslöser (60,5 Minuten ununterbrochen bei höchstens 25 Hz) ist an einem Gerät gemessen, deshalb standardmäßig aus. Für eine sichere Erkennung ein Messintervall von höchstens 10 s wählen.",
-          "flush_pulse_lead_seconds": "Der Verdichter fährt in etwa 50 Sekunden hoch, zu kurz, um zu reagieren. Der Standard von 180 Sekunden lässt Zeit, vorher auf das Gerät zu schreiben."
+          "scan_interval": "Wie oft die Messwerte (Temperaturen, Durchfluss, Verdichter) gelesen werden, in Sekunden. Standard ist 10. Ein längeres Intervall belastet eine Modbus-Verbindung, die sich andere Geräte teilen können, weniger, kann aber kurze Ereignisse wie den Ölrückführungspuls (ORP) des Verdichters verpassen.",
+          "oil_return_pulse": "Erkennt den Ölrückführungspuls des Verdichters (ORP, auch Spülpuls) und bietet die Geräte-Trigger „Vor einem ORP“ und „Nach einem ORP“ an. Der Auslöser (60,5 Minuten ununterbrochen bei höchstens 25 Hz) ist an einem Gerät gemessen, deshalb standardmäßig aus. Für eine sichere Erkennung ein Messintervall von höchstens 30 s wählen.",
+          "oil_return_pulse_lead_seconds": "Der Verdichter fährt in etwa 50 Sekunden hoch, zu kurz, um zu reagieren. Der Standard von 180 Sekunden lässt Zeit, vorher auf das Gerät zu schreiben."
         }
       }
     }
   },
   "device_automation": {
     "trigger_type": {
-      "flush_pulse_imminent": "Vor einem Spülpuls",
-      "flush_pulse_finished": "Nach einem Spülpuls"
+      "orp_imminent": "Vor einem Ölrückführungspuls (ORP)",
+      "orp_finished": "Nach einem Ölrückführungspuls (ORP)"
     }
   }
 }

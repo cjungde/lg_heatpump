@@ -1,4 +1,4 @@
-"""Tests for the flush pulse device triggers."""
+"""Tests for the oil return pulse (ORP) device triggers."""
 
 from __future__ import annotations
 
@@ -14,11 +14,7 @@ from pytest_homeassistant_custom_component.common import (
     async_mock_service,
 )
 
-from custom_components.lg_heatpump.const import (
-    CONF_FLUSH_PULSE,
-    DOMAIN,
-    EVENT_FLUSH_PULSE,
-)
+from custom_components.lg_heatpump.const import CONF_ORP, DOMAIN, EVENT_ORP
 from homeassistant.components.device_automation import DeviceAutomationType
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
@@ -44,7 +40,7 @@ class _Clock:
 async def _setup(hass: HomeAssistant, entry: MockConfigEntry, *, enabled: bool) -> None:
     entry.add_to_hass(hass)
     if enabled:
-        hass.config_entries.async_update_entry(entry, options={CONF_FLUSH_PULSE: True})
+        hass.config_entries.async_update_entry(entry, options={CONF_ORP: True})
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done(wait_background_tasks=True)
 
@@ -97,15 +93,13 @@ async def test_triggers_are_offered_only_when_the_option_is_on(
     )
     assert [t for t in offered if t["domain"] == DOMAIN] == []
 
-    hass.config_entries.async_update_entry(
-        mock_config_entry, options={CONF_FLUSH_PULSE: True}
-    )
+    hass.config_entries.async_update_entry(mock_config_entry, options={CONF_ORP: True})
     offered = await async_get_device_automations(
         hass, DeviceAutomationType.TRIGGER, device_id
     )
     assert sorted(t["type"] for t in offered if t["domain"] == DOMAIN) == [
-        "flush_pulse_finished",
-        "flush_pulse_imminent",
+        "orp_finished",
+        "orp_imminent",
     ]
 
 
@@ -117,14 +111,14 @@ async def test_a_pulse_fires_a_warning_and_an_all_clear(
 ) -> None:
     """Both events fire once, in order, for one recorded-shape pulse."""
     clock = _Clock()
-    events = async_capture_events(hass, EVENT_FLUSH_PULSE)
+    events = async_capture_events(hass, EVENT_ORP)
     with patch(CLOCK, clock):
         await _setup(hass, mock_config_entry, enabled=True)
         await _run_a_pulse(hass, mock_config_entry, clock, mock_unit)
 
     assert [e.data["type"] for e in events] == [
-        "flush_pulse_imminent",
-        "flush_pulse_finished",
+        "orp_imminent",
+        "orp_finished",
     ]
     warning, finished = (e.data for e in events)
     device_id = _device_id(hass, mock_config_entry)
@@ -146,13 +140,13 @@ async def test_nothing_fires_while_the_option_is_off(
 ) -> None:
     """With the tracker off the integration never looks at the compressor."""
     clock = _Clock()
-    events = async_capture_events(hass, EVENT_FLUSH_PULSE)
+    events = async_capture_events(hass, EVENT_ORP)
     with patch(CLOCK, clock):
         await _setup(hass, mock_config_entry, enabled=False)
         await _run_a_pulse(hass, mock_config_entry, clock, mock_unit)
 
     assert events == []
-    assert mock_config_entry.runtime_data.readings.flush_pulse is None
+    assert mock_config_entry.runtime_data.readings.oil_return_pulse is None
 
 
 async def test_a_high_load_phase_fires_nothing(
@@ -161,9 +155,9 @@ async def test_a_high_load_phase_fires_nothing(
     mock_unit: MockModbusUnit,
     patched_connection: None,
 ) -> None:
-    """Running at 3300 rpm after a load change is not a flush pulse."""
+    """Running at 3300 rpm after a load change is not an ORP."""
     clock = _Clock()
-    events = async_capture_events(hass, EVENT_FLUSH_PULSE)
+    events = async_capture_events(hass, EVENT_ORP)
     with patch(CLOCK, clock):
         await _setup(hass, mock_config_entry, enabled=True)
         for hz in [30] * 60 + [40, 50, 55] + [55] * 30 + [30]:
@@ -191,25 +185,19 @@ async def test_a_device_trigger_runs_an_automation(
                     "platform": "device",
                     "domain": DOMAIN,
                     "device_id": device_id,
-                    "type": "flush_pulse_imminent",
+                    "type": "orp_imminent",
                 },
                 "action": {"service": "test.automation"},
             }
         },
     )
 
-    hass.bus.async_fire(
-        EVENT_FLUSH_PULSE, {"device_id": device_id, "type": "flush_pulse_finished"}
-    )
-    hass.bus.async_fire(
-        EVENT_FLUSH_PULSE, {"device_id": "another", "type": "flush_pulse_imminent"}
-    )
+    hass.bus.async_fire(EVENT_ORP, {"device_id": device_id, "type": "orp_finished"})
+    hass.bus.async_fire(EVENT_ORP, {"device_id": "another", "type": "orp_imminent"})
     await hass.async_block_till_done()
     assert calls == []
 
-    hass.bus.async_fire(
-        EVENT_FLUSH_PULSE, {"device_id": device_id, "type": "flush_pulse_imminent"}
-    )
+    hass.bus.async_fire(EVENT_ORP, {"device_id": device_id, "type": "orp_imminent"})
     await hass.async_block_till_done()
     assert len(calls) == 1
 
@@ -226,7 +214,7 @@ async def test_a_withdrawn_warning_still_fires_after(
     would never be told to put it back.
     """
     clock = _Clock()
-    events = async_capture_events(hass, EVENT_FLUSH_PULSE)
+    events = async_capture_events(hass, EVENT_ORP)
     with patch(CLOCK, clock):
         await _setup(hass, mock_config_entry, enabled=True)
         for _ in range(352):  # 58.7 minutes in the band, past the warning
@@ -234,8 +222,8 @@ async def test_a_withdrawn_warning_still_fires_after(
         await _poll(hass, mock_config_entry, clock, mock_unit, 0)
 
     assert [(e.data["type"], e.data["completed"]) for e in events] == [
-        ("flush_pulse_imminent", None),
-        ("flush_pulse_finished", False),
+        ("orp_imminent", None),
+        ("orp_finished", False),
     ]
     assert events[1].data["peak_rpm"] is None
 
@@ -250,7 +238,7 @@ async def test_a_failed_read_is_not_an_observation(
     clock = _Clock()
     with patch(CLOCK, clock):
         await _setup(hass, mock_config_entry, enabled=True)
-        tracker = mock_config_entry.runtime_data.readings.flush_pulse
+        tracker = mock_config_entry.runtime_data.readings.oil_return_pulse
         with patch.object(tracker, "update", wraps=tracker.update) as spy:
             mock_unit.fail_read(0, IllegalDataAddressError(), register_type="input")
             await _poll(hass, mock_config_entry, clock, mock_unit, LOW_LOAD_HZ)

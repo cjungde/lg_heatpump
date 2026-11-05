@@ -18,13 +18,13 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util.dt import utcnow
 
-from .const import DOMAIN, EVENT_FLUSH_PULSE, LOGGER, MANUFACTURER
+from .const import DOMAIN, EVENT_ORP, LOGGER, MANUFACTURER
 from .lg_heatpump_modbus import SETTING_COMPONENTS, UpdateReport
 from .lg_heatpump_modbus.logic import (
     EVENT_CANCELLED,
     EVENT_FINISHED,
     EVENT_IMMINENT,
-    FlushPulseTracker,
+    OilReturnPulseTracker,
 )
 
 if TYPE_CHECKING:
@@ -67,8 +67,8 @@ class LgHeatPumpCoordinator(DataUpdateCoordinator[UpdateReport]):
         self.device = device
         self._poll = poll
         self._consecutive_failures: dict[str, int] = {}
-        self.flush_pulse: FlushPulseTracker | None = None
-        """Follows the flush pulse; set by the setup when the option is on."""
+        self.oil_return_pulse: OilReturnPulseTracker | None = None
+        """Follows the ORP (oil return pulse); set by the setup if the option is on."""
         self.last_poll_time: datetime | None = None
         """When the last poll finished, whether it succeeded or not."""
 
@@ -111,11 +111,11 @@ class LgHeatPumpCoordinator(DataUpdateCoordinator[UpdateReport]):
                 "no sub-system answered", list(report.failed.values())
             )
         self._log_transitions(report)
-        if self.flush_pulse is not None:
-            self._track_flush_pulse(report)
+        if self.oil_return_pulse is not None:
+            self._track_oil_return_pulse(report)
         return report
 
-    def _track_flush_pulse(self, report: UpdateReport) -> None:
+    def _track_oil_return_pulse(self, report: UpdateReport) -> None:
         """Feed the tracker one observation and fire what the poll caused.
 
         The events go out before the entities see the new data: a warning is only
@@ -128,7 +128,7 @@ class LgHeatPumpCoordinator(DataUpdateCoordinator[UpdateReport]):
         A withdrawn warning goes out as "after" with ``completed`` false, so an
         automation that acted on "before" always hears back.
         """
-        tracker = self.flush_pulse
+        tracker = self.oil_return_pulse
         device = self.device
         fresh = not {"sensors", "states"} & set(report.failed)
         events = tracker.update(
@@ -145,7 +145,7 @@ class LgHeatPumpCoordinator(DataUpdateCoordinator[UpdateReport]):
             record = tracker.last_pulse if completed else None
             expected = tracker.expected_at()
             self.hass.bus.async_fire(
-                EVENT_FLUSH_PULSE,
+                EVENT_ORP,
                 {
                     "type": event_type,
                     "completed": completed if event_type == EVENT_FINISHED else None,
@@ -162,7 +162,7 @@ class LgHeatPumpCoordinator(DataUpdateCoordinator[UpdateReport]):
                 },
             )
             LOGGER.info(
-                "%s: flush pulse %s (running time %s min)",
+                "%s: oil return pulse %s (running time %s min)",
                 self.name,
                 event,
                 record.runtime_minutes if record else tracker.runtime_minutes,
