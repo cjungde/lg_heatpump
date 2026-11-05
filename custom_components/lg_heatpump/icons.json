@@ -63,6 +63,9 @@
       "water_flow_rate": {
         "default": "mdi:waves-arrow-right"
       },
+      "water_flow_rate_raw": {
+        "default": "mdi:waves-arrow-right"
+      },
       "water_outlet_temperature_circuit_1": {
         "default": "mdi:thermometer"
       },

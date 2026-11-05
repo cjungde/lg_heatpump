@@ -38,6 +38,7 @@ from homeassistant.const import (
     SERVICE_TURN_ON,
     STATE_OFF,
     STATE_ON,
+    EntityCategory,
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
@@ -91,6 +92,77 @@ async def test_odu_operation_cycle_sensor(
     state = hass.states.get(entity_id)
     assert state is not None
     assert state.state == "heating"
+
+
+async def _enable_raw_flow_sensor(
+    hass: HomeAssistant,
+    entity_registry: er.EntityRegistry,
+    entry: MockConfigEntry,
+) -> None:
+    """Turn the raw flow sensor on, which is off by default, and reload."""
+    entity_registry.async_update_entity(
+        "sensor.lg_therma_v_water_flow_rate_raw", disabled_by=None
+    )
+    await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+
+async def _refresh_readings(hass: HomeAssistant, entry: MockConfigEntry) -> None:
+    await entry.runtime_data.readings.async_refresh()
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+
+async def test_raw_flow_sensor_is_off_by_default(
+    entity_registry: er.EntityRegistry,
+    init_integration: MockConfigEntry,
+) -> None:
+    """The raw flow is a diagnostic: registered, but disabled until asked for."""
+    entry = entity_registry.async_get("sensor.lg_therma_v_water_flow_rate_raw")
+    assert entry is not None
+    assert entry.disabled_by is er.RegistryEntryDisabler.INTEGRATION
+    assert entry.entity_category is EntityCategory.DIAGNOSTIC
+
+
+async def test_both_flow_sensors_agree_while_the_pump_runs(
+    hass: HomeAssistant,
+    entity_registry: er.EntityRegistry,
+    init_integration: MockConfigEntry,
+) -> None:
+    """With the pump running there is nothing to correct."""
+    await _enable_raw_flow_sensor(hass, entity_registry, init_integration)
+
+    assert hass.states.get("sensor.lg_therma_v_water_flow_rate").state == "17.2"
+    assert hass.states.get("sensor.lg_therma_v_water_flow_rate_raw").state == "17.2"
+
+
+async def test_flow_is_zero_while_the_pump_is_off_and_raw_keeps_the_floor(
+    hass: HomeAssistant,
+    entity_registry: er.EntityRegistry,
+    mock_unit,
+    init_integration: MockConfigEntry,
+) -> None:
+    """The sensor reports 5.0 l/min with the pump stopped; the gate removes it."""
+    await _enable_raw_flow_sensor(hass, entity_registry, init_integration)
+    mock_unit.discrete_inputs[1] = False  # water_pump
+    mock_unit.input[8] = 50  # water_flow_rate -> 5.0 l/min, the range floor
+    await _refresh_readings(hass, init_integration)
+
+    assert hass.states.get("sensor.lg_therma_v_water_flow_rate").state == "0.0"
+    assert hass.states.get("sensor.lg_therma_v_water_flow_rate_raw").state == "5.0"
+
+
+async def test_debug_mode_shows_the_raw_flow_in_the_corrected_sensor(
+    hass: HomeAssistant,
+    mock_unit,
+    init_integration: MockConfigEntry,
+) -> None:
+    """Debug mode switches every correction off, as it does for the sentinels."""
+    mock_unit.discrete_inputs[1] = False
+    mock_unit.input[8] = 50
+    init_integration.runtime_data.device.debug = True
+    await _refresh_readings(hass, init_integration)
+
+    assert hass.states.get("sensor.lg_therma_v_water_flow_rate").state == "5.0"
 
 
 async def test_derived_sensors(

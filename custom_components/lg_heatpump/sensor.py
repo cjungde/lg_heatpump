@@ -103,6 +103,18 @@ SENSOR_DESCRIPTIONS: tuple[LgHeatPumpSensorDescription, ...] = (
         suggested_display_precision=1,
     ),
     LgHeatPumpSensorDescription(
+        key="water_flow_rate_raw",
+        translation_key="water_flow_rate_raw",
+        component="sensors",
+        attribute="water_flow_rate",
+        device_class=SensorDeviceClass.VOLUME_FLOW_RATE,
+        native_unit_of_measurement=UnitOfVolumeFlowRate.LITERS_PER_MINUTE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+    ),
+    LgHeatPumpSensorDescription(
         key="compressor_speed",
         translation_key="compressor_speed",
         component="sensors",
@@ -251,4 +263,7 @@ class LgHeatPumpSensor(LgHeatPumpEntity, SensorEntity):
             return value.name.lower()
         if self.entity_description.key == "compressor_speed":
             return self._subsystem.compressor_speed
+        if self.entity_description.key == "water_flow_rate":
+            # The gated value lives on the heat pump, the raw one on the sensors.
+            return self.device.water_flow_rate
         return value
