@@ -137,7 +137,9 @@ oil, after 60.5 minutes of uninterrupted running at or below 25 Hz. With the opt
 the integration offers two device triggers, **Before a flush pulse** (the warning lead
 time before it) and **After a flush pulse**, for use in automations. What to do at those
 moments, for example raising the flow temperature, is up to you: the integration only
-says when.
+says when. "After" also fires when an announced pulse did not come (the compressor
+stopped, defrosted or did not ramp); its event data then carries `completed: false`, so
+whatever an automation did on "before" can always be undone.
 
 The 60.5 minute trigger is measured on one unit, which is why the option is off by
 default. Replaying 48 recorded hours (31 pulses) at different polling intervals found

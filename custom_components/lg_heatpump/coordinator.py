@@ -20,7 +20,12 @@ from homeassistant.util.dt import utcnow
 
 from .const import DOMAIN, EVENT_FLUSH_PULSE, LOGGER, MANUFACTURER
 from .lg_heatpump_modbus import SETTING_COMPONENTS, UpdateReport
-from .lg_heatpump_modbus.logic import EVENT_FINISHED, EVENT_IMMINENT, FlushPulseTracker
+from .lg_heatpump_modbus.logic import (
+    EVENT_CANCELLED,
+    EVENT_FINISHED,
+    EVENT_IMMINENT,
+    FlushPulseTracker,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -107,34 +112,43 @@ class LgHeatPumpCoordinator(DataUpdateCoordinator[UpdateReport]):
             )
         self._log_transitions(report)
         if self.flush_pulse is not None:
-            self._track_flush_pulse()
+            self._track_flush_pulse(report)
         return report
 
-    def _track_flush_pulse(self) -> None:
+    def _track_flush_pulse(self, report: UpdateReport) -> None:
         """Feed the tracker one observation and fire what the poll caused.
 
         The events go out before the entities see the new data: a warning is only
-        useful while there is still time to act on it. A poll in which the
-        compressor speed could not be read passes ``None`` and is skipped by the
-        tracker, which is not the same as a compressor stop.
+        useful while there is still time to act on it.
+
+        A sub-system that failed this poll keeps its previous values, so its
+        readings are not an observation. The tracker then gets ``None`` and skips
+        the poll, which is not the same as a compressor stop.
+
+        A withdrawn warning goes out as "after" with ``completed`` false, so an
+        automation that acted on "before" always hears back.
         """
         tracker = self.flush_pulse
         device = self.device
+        fresh = not {"sensors", "states"} & set(report.failed)
         events = tracker.update(
             utcnow(),
-            device.sensors.compressor_speed,
+            device.sensors.compressor_speed if fresh else None,
             defrosting=bool(device.states.defrosting),
             dhw_heating=bool(device.states.dhw_heating),
         )
-        for event_type in events:
-            if event_type not in (EVENT_IMMINENT, EVENT_FINISHED):
-                continue  # only "before" and "after" are offered
-            record = tracker.last_pulse if event_type == EVENT_FINISHED else None
+        for event in events:
+            if event not in (EVENT_IMMINENT, EVENT_FINISHED, EVENT_CANCELLED):
+                continue  # the start of a pulse is not offered as a trigger
+            completed = event == EVENT_FINISHED
+            event_type = EVENT_IMMINENT if event == EVENT_IMMINENT else EVENT_FINISHED
+            record = tracker.last_pulse if completed else None
             expected = tracker.expected_at()
             self.hass.bus.async_fire(
                 EVENT_FLUSH_PULSE,
                 {
                     "type": event_type,
+                    "completed": completed if event_type == EVENT_FINISHED else None,
                     "device_id": self._device_id(),
                     "entry_id": self.config_entry.entry_id,
                     "runtime_minutes": (
@@ -150,7 +164,7 @@ class LgHeatPumpCoordinator(DataUpdateCoordinator[UpdateReport]):
             LOGGER.info(
                 "%s: flush pulse %s (running time %s min)",
                 self.name,
-                event_type,
+                event,
                 record.runtime_minutes if record else tracker.runtime_minutes,
             )
 

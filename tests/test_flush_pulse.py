@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
+from modbus_connection import IllegalDataAddressError
 from modbus_connection.mock import MockModbusUnit
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
@@ -130,6 +131,8 @@ async def test_a_pulse_fires_a_warning_and_an_all_clear(
     assert warning["device_id"] == finished["device_id"] == device_id
     assert warning["entry_id"] == mock_config_entry.entry_id
     assert warning["expected_at"] is not None
+    assert warning["completed"] is None
+    assert finished["completed"] is True
     assert finished["peak_rpm"] == 3600
     assert 59 <= finished["runtime_minutes"] <= 61
     assert 20 <= finished["duration_seconds"] <= 70
@@ -209,3 +212,50 @@ async def test_a_device_trigger_runs_an_automation(
     )
     await hass.async_block_till_done()
     assert len(calls) == 1
+
+
+async def test_a_withdrawn_warning_still_fires_after(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_unit: MockModbusUnit,
+    patched_connection: None,
+) -> None:
+    """The compressor stops after the warning: "after" fires, marked not completed.
+
+    Without it an automation that raised the flow temperature on the warning
+    would never be told to put it back.
+    """
+    clock = _Clock()
+    events = async_capture_events(hass, EVENT_FLUSH_PULSE)
+    with patch(CLOCK, clock):
+        await _setup(hass, mock_config_entry, enabled=True)
+        for _ in range(352):  # 58.7 minutes in the band, past the warning
+            await _poll(hass, mock_config_entry, clock, mock_unit, LOW_LOAD_HZ)
+        await _poll(hass, mock_config_entry, clock, mock_unit, 0)
+
+    assert [(e.data["type"], e.data["completed"]) for e in events] == [
+        ("flush_pulse_imminent", None),
+        ("flush_pulse_finished", False),
+    ]
+    assert events[1].data["peak_rpm"] is None
+
+
+async def test_a_failed_read_is_not_an_observation(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_unit: MockModbusUnit,
+    patched_connection: None,
+) -> None:
+    """A sub-system that failed keeps its old values; they must not be fed as new."""
+    clock = _Clock()
+    with patch(CLOCK, clock):
+        await _setup(hass, mock_config_entry, enabled=True)
+        tracker = mock_config_entry.runtime_data.readings.flush_pulse
+        with patch.object(tracker, "update", wraps=tracker.update) as spy:
+            mock_unit.fail_read(0, IllegalDataAddressError(), register_type="input")
+            await _poll(hass, mock_config_entry, clock, mock_unit, LOW_LOAD_HZ)
+            assert spy.call_args.args[1] is None
+
+            mock_unit.fail_read(0, None, register_type="input")
+            await _poll(hass, mock_config_entry, clock, mock_unit, LOW_LOAD_HZ)
+            assert spy.call_args.args[1] == 1500
