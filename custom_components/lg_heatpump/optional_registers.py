@@ -38,6 +38,7 @@ from homeassistant.config_entries import ConfigEntryState
 from homeassistant.helpers.storage import Store
 
 from .const import DOMAIN, LOGGER
+from .journal import journal_for
 from .lg_heatpump_modbus import LIMIT_DATAPOINTS
 
 if TYPE_CHECKING:
@@ -122,6 +123,7 @@ async def async_request_recheck(
     if entry.state is ConfigEntryState.LOADED:
         entry.runtime_data.optional_registers.armed = False
     await _store(hass, entry.entry_id).async_save(dict(RECHECK_RECORD))
+    journal_for(hass, entry).event("recheck_requested")
     LOGGER.info("%s: the optional registers will be probed again", entry.title)
 
 
@@ -156,6 +158,9 @@ class OptionalRegisters:
             )
             record = None
         self.support, self.source = restore(record, fingerprint(), identity_of(device))
+        journal_for(self.hass, self.entry).event(
+            "optional_registers", source=self.source, support=dict(self.support)
+        )
         LOGGER.debug(
             "%s: optional registers %s (%s)",
             self.entry.title,
@@ -176,6 +181,7 @@ class OptionalRegisters:
         served = await device.async_probe_limit(name)
         if not self.armed:
             return  # a recheck was requested while this probe waited
+        journal_for(self.hass, self.entry).event("probe", register=name, served=served)
         if served is None:
             LOGGER.debug("%s: probe of %s hit a link failure", self.entry.title, name)
             return

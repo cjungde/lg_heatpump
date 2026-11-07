@@ -46,7 +46,7 @@ async def test_the_setup_polls_and_requests_are_recorded(
     """Every request and both first polls are in the download, with durations."""
     journal = await _journal(hass, init_integration)
 
-    assert [e["event"] for e in journal["events"]] == ["setup"]
+    assert len(_events(journal, "setup")) == 1
     assert [p["table"] for p in journal["polls"]] == ["readings", "settings"]
     readings = journal["polls"][0]
     assert "sensors" in readings["updated"]
@@ -129,7 +129,7 @@ async def test_the_journal_survives_a_reload_and_goes_with_the_entry(
     await hass.async_block_till_done(wait_background_tasks=True)
 
     journal = await _journal(hass, init_integration)
-    assert [e["event"] for e in journal["events"]] == ["setup", "setup"]
+    assert len(_events(journal, "setup")) == 2
     assert len(journal["polls"]) == 4
 
     await hass.config_entries.async_remove(init_integration.entry_id)

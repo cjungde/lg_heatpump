@@ -15,6 +15,10 @@ from pytest_homeassistant_custom_component.common import (
 )
 
 from custom_components.lg_heatpump.const import CONF_ORP, DOMAIN, EVENT_ORP
+from custom_components.lg_heatpump.lg_heatpump_modbus.logic import (
+    EVENT_FINISHED,
+    EVENT_IMMINENT,
+)
 from homeassistant.components.device_automation import DeviceAutomationType
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
@@ -130,6 +134,10 @@ async def test_a_pulse_fires_a_warning_and_an_all_clear(
     assert finished["peak_rpm"] == 3600
     assert 59 <= finished["runtime_minutes"] <= 61
     assert 20 <= finished["duration_seconds"] <= 70
+    journal = mock_config_entry.runtime_data.journal
+    orp = [e for e in journal.events if e["event"] == "orp"]
+    assert [e["trigger"] for e in orp] == [EVENT_IMMINENT, EVENT_FINISHED]
+    assert orp[1]["peak_rpm"] == 3600
 
 
 async def test_nothing_fires_while_the_option_is_off(

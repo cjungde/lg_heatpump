@@ -191,7 +191,9 @@ which is what makes a scaling or address bug fixable.
 that is always on: the last 2000 Modbus requests (function, address, duration,
 outcome; values only for writes), the last 1000 polls (duration, which
 sub-systems failed and why) and the last 300 events worth keeping longer
-(setups, sub-systems failing and recovering, timeouts, link errors, writes).
+(setups, sub-systems failing and recovering, timeouts, link errors, writes,
+and where those features are on: ORP triggers, optional-register probes and
+recheck requests).
 Nothing has to be switched on beforehand, and it does not fill the Home
 Assistant log. It is kept in memory: a reload of the entry keeps it, a restart
 of Home Assistant starts it afresh. At a 10-second interval the requests reach

@@ -192,6 +192,15 @@ class LgHeatPumpCoordinator(DataUpdateCoordinator[UpdateReport]):
                     ),
                 },
             )
+            if self.journal is not None:
+                self.journal.event(
+                    "orp",
+                    trigger=event,
+                    runtime_minutes=(
+                        record.runtime_minutes if record else tracker.runtime_minutes
+                    ),
+                    peak_rpm=record.peak_rpm if record else None,
+                )
             LOGGER.info(
                 "%s: oil return pulse %s (running time %s min)",
                 self.name,

@@ -187,6 +187,15 @@ async def test_a_unit_serving_none_is_probed_once_per_settings_poll(
     assert state.attributes["power_limit"] is False
     stored = hass_storage[f"{DOMAIN}.{mock_config_entry.entry_id}.optional_registers"]
     assert stored["data"]["support"] == ALL_FALSE
+    events = mock_config_entry.runtime_data.journal.events
+    assert [e["source"] for e in events if e["event"] == "optional_registers"] == [
+        "miss"
+    ]
+    assert [(e["register"], e["served"]) for e in events if e["event"] == "probe"] == [
+        ("compressor_modulation_limit", False),
+        ("power_limit", False),
+        ("power_limit_enable", False),
+    ]
     for entity_id in (MODULATION, POWER, ENABLE):
         assert entity_registry.async_get(entity_id) is None
     assert mock_config_entry.state is ConfigEntryState.LOADED
@@ -397,6 +406,14 @@ async def test_a_link_failure_is_no_answer(
 
     await _poll_settings(hass, mock_config_entry)
     assert hass.states.get(SENSOR).attributes["compressor_modulation_limit"] is None
+    probes = [
+        e
+        for e in mock_config_entry.runtime_data.journal.events
+        if e["event"] == "probe"
+    ]
+    assert [(e["register"], e["served"]) for e in probes] == [
+        ("compressor_modulation_limit", None)
+    ]
 
     mock_unit.fail_read(23, None)
     _silence(mock_unit, "compressor_modulation_limit")
@@ -479,6 +496,8 @@ async def test_the_recheck_button_asks_again_after_a_board_swap(
 
     assert mock_config_entry.state is ConfigEntryState.LOADED
     assert _stored(hass_storage, mock_config_entry) == RECHECK_RECORD
+    events = mock_config_entry.runtime_data.journal.events
+    assert [e["event"] for e in events].count("recheck_requested") == 1
     state = hass.states.get(SENSOR)
     assert state.attributes["source"] == "recheck_requested"
     assert len(state.attributes["pending"]) == 3
