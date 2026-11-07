@@ -34,21 +34,15 @@ from .const import (
     CONF_MODEL,
     CONF_ORP,
     CONF_ORP_LEAD,
-    CONF_RECHECK_OPTIONAL,
-    CONF_SCAN_INTERVAL,
     CONF_UNIT_ID,
     DEFAULT_ORP_LEAD,
     DEFAULT_PORT,
     DEFAULT_UNIT_ID,
     DOMAIN,
     MAX_ORP_LEAD,
-    MAX_SCAN_INTERVAL,
     MIN_ORP_LEAD,
-    MIN_SCAN_INTERVAL,
-    SCAN_INTERVAL,
 )
 from .lg_heatpump_modbus import MODELS, LgHeatPump
-from .optional_registers import async_request_recheck
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -103,43 +97,21 @@ async def _async_probe(hass: HomeAssistant, data: dict[str, Any]) -> LgHeatPump:
 
 
 class LgHeatPumpOptionsFlow(OptionsFlowWithReload):
-    """Let the user tune the polling and switch on the ORP triggers."""
+    """Let the user switch on the ORP triggers."""
 
     async def async_step_init(
         self,
         user_input: dict[str, Any] | None = None,
     ) -> ConfigFlowResult:
-        """Choose the measurement interval and the ORP tracker."""
+        """Choose the ORP tracker and its warning lead."""
         if user_input is not None:
-            options = dict(user_input)
-            if options.pop(CONF_RECHECK_OPTIONAL, False):
-                await async_request_recheck(self.hass, self.config_entry)
-                if options == dict(self.config_entry.options):
-                    # Nothing else changed, so no automatic reload follows.
-                    self.hass.config_entries.async_schedule_reload(
-                        self.config_entry.entry_id
-                    )
-            return self.async_create_entry(data=options)
+            return self.async_create_entry(data=user_input)
 
         return self.async_show_form(
             step_id="init",
             data_schema=self.add_suggested_values_to_schema(
                 vol.Schema(
                     {
-                        vol.Required(
-                            CONF_SCAN_INTERVAL,
-                            default=int(SCAN_INTERVAL.total_seconds()),
-                        ): vol.All(
-                            NumberSelector(
-                                NumberSelectorConfig(
-                                    mode=NumberSelectorMode.BOX,
-                                    min=MIN_SCAN_INTERVAL,
-                                    max=MAX_SCAN_INTERVAL,
-                                    unit_of_measurement="s",
-                                )
-                            ),
-                            vol.Coerce(int),
-                        ),
                         vol.Required(CONF_ORP, default=False): BooleanSelector(),
                         vol.Required(
                             CONF_ORP_LEAD,
@@ -155,9 +127,6 @@ class LgHeatPumpOptionsFlow(OptionsFlowWithReload):
                             ),
                             vol.Coerce(int),
                         ),
-                        vol.Required(
-                            CONF_RECHECK_OPTIONAL, default=False
-                        ): BooleanSelector(),
                     }
                 ),
                 self.config_entry.options,

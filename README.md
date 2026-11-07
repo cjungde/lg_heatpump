@@ -125,8 +125,6 @@ library default of 10 s stays in place.
 
 **Configure** on the integration offers:
 
-- **Measurement interval** (5 to 600 s, default 10 s). A longer interval loads a Modbus
-  link that other devices may share less, but can miss short events such as an ORP.
 - **Oil return pulse (ORP) detection** (off by default) and **warning before an ORP**
   (30 to 600 s, default 180 s). See below.
 
@@ -143,9 +141,8 @@ stopped, defrosted or did not ramp); its event data then carries `completed: fal
 whatever an automation did on "before" can always be undone.
 
 The 60.5 minute trigger is measured on one unit, which is why the option is off by
-default. Replaying 48 recorded hours (31 pulses) at different polling intervals found
-all 31 at 10, 20 and 30 s, and 24 of 31 at 60 s: the warning before the pulse does not
-depend on the interval, the "after" trigger needs at least one poll during the ramp.
+default. Replaying 48 recorded hours (31 pulses) at the 10-second measurement interval
+found all 31.
 
 ### Optional limits
 
@@ -166,8 +163,7 @@ identity (input 9997/9998), they are asked again.
 
 A replaced main board may serve registers the old one did not, while reporting
 the same identity. For that case the diagnostic button **Recheck optional
-registers** (disabled by default), or the box of the same name in the
-integration's options, forgets the answers and reloads the entry; the
+registers** (disabled by default) forgets the answers and reloads the entry; the
 three registers are then asked again as after a first setup. The request is
 stored first, so a restart in between does not lose it.
 

@@ -12,11 +12,8 @@ LOGGER: Final = logging.getLogger(__package__)
 CONF_UNIT_ID: Final = "unit_id"
 CONF_MODEL: Final = "model"
 CONF_DEBUG: Final = "debug"
-CONF_SCAN_INTERVAL: Final = "scan_interval"
 CONF_ORP: Final = "oil_return_pulse"
 CONF_ORP_LEAD: Final = "oil_return_pulse_lead_seconds"
-# A one-shot action in the options form, never stored with the options.
-CONF_RECHECK_OPTIONAL: Final = "recheck_optional_registers"
 
 DEFAULT_PORT: Final = 502
 DEFAULT_UNIT_ID: Final = 1
@@ -26,9 +23,6 @@ MANUFACTURER: Final = "LG"
 # A heat pump changes slowly, but the compressor and the pumps do not: poll the
 # measurements often and the setpoints rarely.
 SCAN_INTERVAL: Final = timedelta(seconds=10)
-# Bounds of the measurement interval a user may choose in the options.
-MIN_SCAN_INTERVAL: Final = 5
-MAX_SCAN_INTERVAL: Final = 600
 
 # The oil return pulse (ORP): the tracker is off unless asked for, because the
 # 60.5 minute trigger is measured on one unit. The warning goes out this long

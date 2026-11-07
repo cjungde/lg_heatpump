@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
 from typing import TYPE_CHECKING
 from unittest.mock import patch
 
@@ -15,8 +14,6 @@ from custom_components.lg_heatpump.const import (
     CONF_MODEL,
     CONF_ORP,
     CONF_ORP_LEAD,
-    CONF_RECHECK_OPTIONAL,
-    CONF_SCAN_INTERVAL,
     CONF_UNIT_ID,
     DOMAIN,
 )
@@ -162,100 +159,34 @@ async def test_reconfigure_flow_cannot_connect(
     assert init_integration.data[CONF_HOST] == MOCK_HOST
 
 
-async def test_options_flow_sets_the_scan_interval(
+async def test_options_flow_stores_the_orp_choice(
     hass: HomeAssistant,
     init_integration: MockConfigEntry,
 ) -> None:
-    """The options flow stores the chosen interval and reloads the entry."""
+    """The options flow stores the ORP choice and reloads the entry with it."""
     result = await hass.config_entries.options.async_init(init_integration.entry_id)
     assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "init"
+    assert set(result["data_schema"].schema) == {CONF_ORP, CONF_ORP_LEAD}
 
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {CONF_SCAN_INTERVAL: 10}
+        result["flow_id"], {CONF_ORP: True}
     )
     await hass.async_block_till_done(wait_background_tasks=True)
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert init_integration.options == {
-        CONF_SCAN_INTERVAL: 10,
-        CONF_ORP: False,
-        CONF_ORP_LEAD: 180,
-    }
-    assert init_integration.runtime_data.readings.update_interval == timedelta(
-        seconds=10
-    )
+    assert init_integration.options == {CONF_ORP: True, CONF_ORP_LEAD: 180}
+    assert init_integration.runtime_data.readings.oil_return_pulse is not None
 
 
-async def test_options_flow_rejects_an_interval_out_of_range(
+async def test_options_flow_rejects_a_lead_out_of_range(
     hass: HomeAssistant,
     init_integration: MockConfigEntry,
 ) -> None:
-    """An interval below the minimum is refused by the form."""
+    """A warning lead below the minimum is refused by the form."""
     result = await hass.config_entries.options.async_init(init_integration.entry_id)
 
     with pytest.raises(InvalidData):
         await hass.config_entries.options.async_configure(
-            result["flow_id"], {CONF_SCAN_INTERVAL: 1}
+            result["flow_id"], {CONF_ORP: True, CONF_ORP_LEAD: 1}
         )
-
-
-STORE = f"{DOMAIN}.{{}}.optional_registers"
-
-
-@pytest.mark.parametrize(
-    "interval", [30, 20], ids=["nothing_else_changed", "interval_changed_too"]
-)
-async def test_options_flow_requests_a_recheck_without_storing_it(
-    hass: HomeAssistant,
-    init_integration: MockConfigEntry,
-    hass_storage: dict,
-    interval: int,
-) -> None:
-    """The box asks the optional limits again, reloads once and is not kept."""
-    mock_config_entry = init_integration
-    # store every option the form has, so that "nothing else changed" holds
-    result = await hass.config_entries.options.async_init(mock_config_entry.entry_id)
-    await hass.config_entries.options.async_configure(
-        result["flow_id"], {CONF_SCAN_INTERVAL: 30}
-    )
-    await hass.async_block_till_done(wait_background_tasks=True)
-    stored_options = {**mock_config_entry.options, CONF_SCAN_INTERVAL: interval}
-
-    result = await hass.config_entries.options.async_init(mock_config_entry.entry_id)
-    reload = hass.config_entries.async_reload
-    with patch.object(hass.config_entries, "async_reload", wraps=reload) as reloaded:
-        result = await hass.config_entries.options.async_configure(
-            result["flow_id"],
-            {CONF_SCAN_INTERVAL: interval, CONF_RECHECK_OPTIONAL: True},
-        )
-        await hass.async_block_till_done(wait_background_tasks=True)
-
-    assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert mock_config_entry.options == stored_options
-    assert reloaded.call_count == 1
-    assert hass_storage[STORE.format(mock_config_entry.entry_id)]["data"] == {
-        "recheck": True
-    }
-    optional = mock_config_entry.runtime_data.optional_registers
-    assert optional.source == "recheck_requested"
-
-
-async def test_options_flow_leaves_the_answers_alone_without_the_box(
-    hass: HomeAssistant,
-    init_integration: MockConfigEntry,
-    hass_storage: dict,
-) -> None:
-    """Changing only the interval does not touch the stored answers."""
-    key = STORE.format(init_integration.entry_id)
-    before = hass_storage.get(key)
-    result = await hass.config_entries.options.async_init(init_integration.entry_id)
-    await hass.config_entries.options.async_configure(
-        result["flow_id"], {CONF_SCAN_INTERVAL: 15}
-    )
-    await hass.async_block_till_done(wait_background_tasks=True)
-
-    assert hass_storage.get(key) == before
-    assert (
-        init_integration.runtime_data.optional_registers.source != "recheck_requested"
-    )

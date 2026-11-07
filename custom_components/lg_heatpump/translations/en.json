@@ -315,16 +315,12 @@
     "step": {
       "init": {
         "data": {
-          "scan_interval": "Measurement interval",
           "oil_return_pulse": "Oil return pulse (ORP) detection",
-          "oil_return_pulse_lead_seconds": "Warning before an ORP (seconds)",
-          "recheck_optional_registers": "Recheck optional registers"
+          "oil_return_pulse_lead_seconds": "Warning before an ORP (seconds)"
         },
         "data_description": {
-          "scan_interval": "How often the measurements (temperatures, flow, compressor) are read, in seconds. The default is 10. A longer interval puts less load on a Modbus connection that other devices may share, but can miss short events such as the compressor oil-return pulse.",
-          "oil_return_pulse": "Detects the compressor's oil return pulse (ORP, also called flush pulse) and offers the device triggers \"Before an ORP\" and \"After an ORP\". The trigger (60.5 minutes of uninterrupted running at or below 25 Hz) is measured on one unit, so it is off by default. For reliable detection choose a measurement interval of 30 s or less.",
-          "oil_return_pulse_lead_seconds": "The compressor ramps up over about 50 seconds, which is too short to react to. The default of 180 s leaves time to write to the machine first.",
-          "recheck_optional_registers": "Asks the unit again which optional limits (holding 23/24, coil 6) it serves, for example after its main board was replaced. Each register the unit does not serve costs one request timeout, spread over the next settings polls. Not stored: the box is clear again next time."
+          "oil_return_pulse": "Detects the compressor's oil return pulse (ORP, also called flush pulse) and offers the device triggers \"Before an ORP\" and \"After an ORP\". The trigger (60.5 minutes of uninterrupted running at or below 25 Hz) is measured on one unit, so it is off by default.",
+          "oil_return_pulse_lead_seconds": "The compressor ramps up over about 50 seconds, which is too short to react to. The default of 180 s leaves time to write to the machine first."
         }
       }
     }

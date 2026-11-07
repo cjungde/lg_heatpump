@@ -8,7 +8,6 @@ For more details, see https://github.com/lg-heatpump/lg_heatpump
 
 from __future__ import annotations
 
-from datetime import timedelta
 from typing import TYPE_CHECKING
 
 from homeassistant.components.modbus import async_get_unit
@@ -20,7 +19,6 @@ from .const import (
     CONF_MODEL,
     CONF_ORP,
     CONF_ORP_LEAD,
-    CONF_SCAN_INTERVAL,
     CONF_UNIT_ID,
     DEFAULT_ORP_LEAD,
     LOGGER,
@@ -80,11 +78,8 @@ async def async_setup_entry(
         debug=entry.data.get(CONF_DEBUG, False),
     )
 
-    interval = timedelta(
-        seconds=entry.options.get(CONF_SCAN_INTERVAL, SCAN_INTERVAL.total_seconds())
-    )
     readings = LgHeatPumpCoordinator(
-        hass, entry, device, device.async_update_readings, interval
+        hass, entry, device, device.async_update_readings, SCAN_INTERVAL
     )
     if entry.options.get(CONF_ORP, False):
         readings.oil_return_pulse = OilReturnPulseTracker(

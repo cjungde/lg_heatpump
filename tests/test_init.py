@@ -10,7 +10,6 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.lg_heatpump.const import (
     CONF_MODEL,
-    CONF_SCAN_INTERVAL,
     CONF_UNIT_ID,
     DOMAIN,
     REQUEST_TIMEOUT,
@@ -327,21 +326,21 @@ async def test_diagnostics_include_the_raw_register_map(
 async def test_default_scan_interval_is_unchanged(
     init_integration: MockConfigEntry,
 ) -> None:
-    """Without the option: readings every 10 s, settings every 60 s."""
+    """Readings every 10 s, settings every 60 s."""
     runtime = init_integration.runtime_data
     assert runtime.readings.update_interval == timedelta(seconds=10)
     assert runtime.settings.update_interval == timedelta(seconds=60)
 
 
-async def test_scan_interval_option_applies_to_the_readings_only(
+async def test_a_stored_interval_option_is_ignored(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
     patched_connection: None,
 ) -> None:
-    """The chosen interval drives the measurements, not the rarely changing settings."""
+    """An entry from a release that offered the interval still polls every 10 s."""
     mock_config_entry.add_to_hass(hass)
     hass.config_entries.async_update_entry(
-        mock_config_entry, options={CONF_SCAN_INTERVAL: 10}
+        mock_config_entry, options={"scan_interval": 30}
     )
     await hass.config_entries.async_setup(mock_config_entry.entry_id)
     await hass.async_block_till_done(wait_background_tasks=True)
