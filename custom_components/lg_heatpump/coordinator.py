@@ -111,11 +111,13 @@ class LgHeatPumpCoordinator(DataUpdateCoordinator[UpdateReport]):
                 "no sub-system answered", list(report.failed.values())
             )
         self._log_transitions(report)
-        if self.oil_return_pulse is not None:
-            self._track_oil_return_pulse(report)
+        if (tracker := self.oil_return_pulse) is not None:
+            self._track_oil_return_pulse(tracker, report)
         return report
 
-    def _track_oil_return_pulse(self, report: UpdateReport) -> None:
+    def _track_oil_return_pulse(
+        self, tracker: OilReturnPulseTracker, report: UpdateReport
+    ) -> None:
         """Feed the tracker one observation and fire what the poll caused.
 
         The events go out before the entities see the new data: a warning is only
@@ -128,7 +130,6 @@ class LgHeatPumpCoordinator(DataUpdateCoordinator[UpdateReport]):
         A withdrawn warning goes out as "after" with ``completed`` false, so an
         automation that acted on "before" always hears back.
         """
-        tracker = self.oil_return_pulse
         device = self.device
         fresh = not {"sensors", "states"} & set(report.failed)
         events = tracker.update(
