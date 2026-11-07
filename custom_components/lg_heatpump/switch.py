@@ -12,7 +12,7 @@ from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .coordinator import LgHeatPumpConfigEntry
+from .coordinator import LIMITS_COMPONENT, LgHeatPumpConfigEntry
 from .entity import LgHeatPumpEntity, LgHeatPumpEntityDescription, build_entities
 
 PARALLEL_UPDATES = 1
@@ -45,6 +45,18 @@ SWITCH_DESCRIPTIONS: tuple[LgHeatPumpSwitchDescription, ...] = (
         attribute="dhw_disinfection",
         device_class=SwitchDeviceClass.SWITCH,
         entity_category=EntityCategory.CONFIG,
+    ),
+    # Optional: exists only where the unit serves coil 6, and disabled until
+    # turned on. On its own it changes nothing; it decides whether the unit
+    # obeys the power limit number.
+    LgHeatPumpSwitchDescription(
+        key="power_limit_enable",
+        translation_key="power_limit_enable",
+        component=LIMITS_COMPONENT,
+        attribute="power_limit_enable",
+        device_class=SwitchDeviceClass.SWITCH,
+        entity_category=EntityCategory.CONFIG,
+        entity_registry_enabled_default=False,
     ),
     # Emergency switches are disabled until tested (required for the HACS default
     # repository list). Re-enable them together with the issue #23 clean-up.

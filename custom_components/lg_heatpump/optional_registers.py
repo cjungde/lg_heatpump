@@ -20,8 +20,7 @@ The rules:
   (input 9997/9998). A unit that does not report its identity keeps only its
   positives: a stored "not served" would then rest on hardware that cannot be
   confirmed to be the same, and re-asking costs one timeout once.
-* Nothing is written: the verdicts and, for served limits, the values read
-  with the settings go to the diagnostic sensor and the diagnostics download.
+* A newly found register reloads the entry, so its entities appear.
 """
 
 from __future__ import annotations
@@ -166,7 +165,8 @@ class OptionalRegisters:
         self.source = "probed"
         await self._async_save(device)
         if served:
-            device.set_served_limits(n for n, ok in self.support.items() if ok)
+            # The entity for it exists only after a reload.
+            self.hass.config_entries.async_schedule_reload(self.entry.entry_id)
 
     async def _async_save(self, device: LgHeatPump) -> None:
         try:

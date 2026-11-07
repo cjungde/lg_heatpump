@@ -11,7 +11,7 @@ from typing import Any, override
 from homeassistant.helpers.entity import EntityDescription
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .coordinator import LgHeatPumpCoordinator, LgHeatPumpRuntimeData
+from .coordinator import LIMITS_COMPONENT, LgHeatPumpCoordinator, LgHeatPumpRuntimeData
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -71,8 +71,16 @@ class LgHeatPumpEntity(CoordinatorEntity[LgHeatPumpCoordinator]):
         return self.entity_description.component not in self.coordinator.data.failed
 
 
-def served(runtime_data: LgHeatPumpRuntimeData, attribute: str) -> bool:
-    """Return whether the configured model serves ``attribute``."""
+def served(
+    runtime_data: LgHeatPumpRuntimeData, attribute: str, component: str | None = None
+) -> bool:
+    """Return whether the configured model serves ``attribute``.
+
+    An optional limit is served only once the unit has been found to answer it
+    (see ``optional_registers``); the model cannot tell.
+    """
+    if component == LIMITS_COMPONENT:
+        return attribute in runtime_data.device.served_limits
     return runtime_data.device.serves(attribute)
 
 
@@ -127,5 +135,5 @@ def build_entities[E, D: LgHeatPumpEntityDescription](
     return [
         entity_class(runtime_data, description)  # type: ignore[call-arg]
         for description in descriptions
-        if served(runtime_data, description.attribute)
+        if served(runtime_data, description.attribute, description.component)
     ]

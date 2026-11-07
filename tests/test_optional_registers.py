@@ -18,8 +18,16 @@ from custom_components.lg_heatpump.optional_registers import (
     pending,
     restore,
 )
+from homeassistant.components.number import (
+    ATTR_VALUE,
+    DOMAIN as NUMBER_DOMAIN,
+    SERVICE_SET_VALUE,
+)
+from homeassistant.components.switch import DOMAIN as SWITCH_DOMAIN
 from homeassistant.config_entries import ConfigEntryState
+from homeassistant.const import ATTR_ENTITY_ID, SERVICE_TURN_OFF
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import entity_registry as er
 
 SENSOR = "sensor.lg_therma_v_optional_registers"
@@ -182,34 +190,107 @@ async def test_a_unit_serving_none_is_probed_once_per_settings_poll(
 
 
 @pytest.mark.usefixtures("patched_connection")
-async def test_a_found_register_is_read_and_shown_but_never_written(
+async def test_a_found_register_gets_a_disabled_entity(
     hass: HomeAssistant,
     mock_unit: MockModbusUnit,
     mock_config_entry: MockConfigEntry,
     entity_registry: er.EntityRegistry,
 ) -> None:
-    """A served register is polled with the settings; no entity can write it."""
+    """A served register reloads the entry; its entity is off until turned on."""
     mock_unit.holding[23] = 80
     _silence(mock_unit, "power_limit", "power_limit_enable")
     await _setup(hass, mock_config_entry)
 
-    await _poll_settings(hass, mock_config_entry)  # finds holding 23
+    await _poll_settings(hass, mock_config_entry)  # finds holding 23, reloads
 
-    assert hass.states.get(SENSOR).attributes["compressor_modulation_limit"] is True
-    assert set(mock_config_entry.runtime_data.device.served_limits) == {
-        "compressor_modulation_limit"
-    }
-    for entity_id in (MODULATION, POWER, ENABLE):
-        assert entity_registry.async_get(entity_id) is None
+    entry = entity_registry.async_get(MODULATION)
+    assert entry is not None
+    assert entry.disabled_by is er.RegistryEntryDisabler.INTEGRATION
+    assert entity_registry.async_get(POWER) is None
+    assert hass.states.get(SENSOR).attributes["source"] == "hit"
 
-    writes: list[object] = []
-    mock_unit.on_write(writes.append)
+    await _enable(hass, entity_registry, mock_config_entry, MODULATION)
+    assert hass.states.get(MODULATION).state == "80"
     mock_unit.read_events.clear()
     await _poll_settings(hass, mock_config_entry)
+    # the served one is polled with the settings; the silent ones are not asked
+    # again until they are pending, and they are not (power_limit is next)
     assert ("holding", 23) in _limit_reads(mock_unit)
-    diagnostics = await async_get_config_entry_diagnostics(hass, mock_config_entry)
-    assert diagnostics["values"]["limits"]["compressor_modulation_limit"] == 80
-    assert writes == []
+
+
+@pytest.mark.usefixtures("patched_connection")
+async def test_the_modulation_limit_takes_off_or_40_to_100(
+    hass: HomeAssistant,
+    mock_unit: MockModbusUnit,
+    mock_config_entry: MockConfigEntry,
+    entity_registry: er.EntityRegistry,
+    hass_storage: dict,
+) -> None:
+    """0 and 40-100 % reach the register; 1-39 % is refused before the bus."""
+    mock_unit.holding[23] = 80
+    await _setup_with_stored(
+        hass,
+        mock_unit,
+        mock_config_entry,
+        hass_storage,
+        compressor_modulation_limit=True,
+    )
+    await _enable(hass, entity_registry, mock_config_entry, MODULATION)
+
+    for value in (0, 40):
+        await hass.services.async_call(
+            NUMBER_DOMAIN,
+            SERVICE_SET_VALUE,
+            {ATTR_ENTITY_ID: MODULATION, ATTR_VALUE: value},
+            blocking=True,
+        )
+        assert mock_unit.holding[23] == value
+
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            NUMBER_DOMAIN,
+            SERVICE_SET_VALUE,
+            {ATTR_ENTITY_ID: MODULATION, ATTR_VALUE: 39},
+            blocking=True,
+        )
+    assert mock_unit.holding[23] == 40
+
+
+@pytest.mark.usefixtures("patched_connection")
+async def test_the_power_limit_is_written_in_tenths_and_the_switch_on_coil_6(
+    hass: HomeAssistant,
+    mock_unit: MockModbusUnit,
+    mock_config_entry: MockConfigEntry,
+    entity_registry: er.EntityRegistry,
+    hass_storage: dict,
+) -> None:
+    """6.7 kW is 67 in the register, not 6."""
+    mock_unit.holding[24] = 125
+    mock_unit.coils[6] = True
+    await _setup_with_stored(
+        hass,
+        mock_unit,
+        mock_config_entry,
+        hass_storage,
+        power_limit=True,
+        power_limit_enable=True,
+    )
+    await _enable(hass, entity_registry, mock_config_entry, POWER, ENABLE)
+    assert hass.states.get(POWER).state == "12.5"
+    assert hass.states.get(ENABLE).state == "on"
+
+    await hass.services.async_call(
+        NUMBER_DOMAIN,
+        SERVICE_SET_VALUE,
+        {ATTR_ENTITY_ID: POWER, ATTR_VALUE: 6.7},
+        blocking=True,
+    )
+    await hass.services.async_call(
+        SWITCH_DOMAIN, SERVICE_TURN_OFF, {ATTR_ENTITY_ID: ENABLE}, blocking=True
+    )
+
+    assert mock_unit.holding[24] == 67
+    assert mock_unit.coils[6] is False
 
 
 async def _setup_with_stored(

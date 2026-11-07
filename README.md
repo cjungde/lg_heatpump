@@ -137,10 +137,9 @@ read of one costs a full request timeout.
 The integration therefore asks once per register, one per settings poll and only
 after that poll answered in full, and remembers the answer. A unit serving none
 of them costs three timeouts once, spread over three polls. A register found
-served is then read with the settings. The diagnostic sensor **Optional
-registers** shows each verdict and where it came from, and the diagnostics
-download carries the values. Nothing is written to these registers: writing
-them is left until it has been confirmed on a unit that serves them.
+served gets its entity after a reload; **these entities are disabled by default**,
+because they limit what the heat pump may draw. The diagnostic sensor
+**Optional registers** shows each verdict and where it came from.
 
 The answers are kept for the same unit only: if the unit reports a different
 identity (input 9997/9998), they are asked again.
