@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from datetime import datetime
 from enum import IntEnum
-from typing import override
+from typing import Any, override
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -24,7 +24,8 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .coordinator import LgHeatPumpConfigEntry, LgHeatPumpCoordinator
 from .entity import LgHeatPumpEntity, LgHeatPumpEntityDescription, build_entities
-from .lg_heatpump_modbus import EnergyState, OduOperationCycle
+from .lg_heatpump_modbus import LIMIT_DATAPOINTS, EnergyState, OduOperationCycle
+from .optional_registers import LIMIT_ADDRESSES, OptionalRegisters, pending
 
 PARALLEL_UPDATES = 0
 
@@ -197,8 +198,66 @@ async def async_setup_entry(
             runtime_data.settings,
             translation_key="settings_last_poll",
         ),
+        LgHeatPumpOptionalRegistersSensor(
+            runtime_data.settings, runtime_data.optional_registers
+        ),
     ]
     async_add_entities(entities)
+
+
+class LgHeatPumpOptionalRegistersSensor(
+    CoordinatorEntity[LgHeatPumpCoordinator], SensorEntity
+):
+    """Diagnostic: which optional limits the unit serves, and on what grounds.
+
+    Whether an entity for a limit exists depends on the unit, so its absence is
+    indistinguishable from a bug unless the decision itself is visible. The state
+    counts the served limits; the attributes give each verdict (``None`` while
+    still unknown) and ``source``: ``hit`` is a stored answer for the same unit,
+    ``probed`` an answer from this run, ``positive_only`` a stored answer of
+    which only the served limits were believed, anything else a fresh start.
+    """
+
+    _attr_has_entity_name = True
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_translation_key = "optional_registers"
+
+    def __init__(
+        self, coordinator: LgHeatPumpCoordinator, optional: OptionalRegisters
+    ) -> None:
+        """Initialize the sensor on the settings coordinator, which probes."""
+        super().__init__(coordinator)
+        self._optional = optional
+        self._attr_unique_id = f"{coordinator.config_entry.entry_id}_optional_registers"
+        self._attr_device_info = coordinator.device_info
+
+    @property
+    @override
+    def available(self) -> bool:
+        """Stay available: the verdicts do not depend on the last poll."""
+        return True
+
+    @property
+    @override
+    def native_value(self) -> int:
+        """Return how many optional limits the unit serves."""
+        return sum(1 for served in self._optional.support.values() if served)
+
+    @property
+    @override
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return each verdict, its grounds and what is still to be asked."""
+        support = self._optional.support
+        attributes: dict[str, Any] = {
+            name: support.get(name) for name in LIMIT_DATAPOINTS
+        }
+        attributes["source"] = self._optional.source
+        attributes["pending"] = list(pending(support))
+        attributes["addresses"] = {
+            name: f"{space} {address}"
+            for name, (space, address) in LIMIT_ADDRESSES.items()
+        }
+        return attributes
 
 
 class LgHeatPumpLastPollSensor(CoordinatorEntity[LgHeatPumpCoordinator], SensorEntity):
