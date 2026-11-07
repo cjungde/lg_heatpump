@@ -15,6 +15,8 @@ CONF_DEBUG: Final = "debug"
 CONF_SCAN_INTERVAL: Final = "scan_interval"
 CONF_ORP: Final = "oil_return_pulse"
 CONF_ORP_LEAD: Final = "oil_return_pulse_lead_seconds"
+# A one-shot action in the options form, never stored with the options.
+CONF_RECHECK_OPTIONAL: Final = "recheck_optional_registers"
 
 DEFAULT_PORT: Final = 502
 DEFAULT_UNIT_ID: Final = 1

@@ -21,6 +21,11 @@ The rules:
   positives: a stored "not served" would then rest on hardware that cannot be
   confirmed to be the same, and re-asking costs one timeout once.
 * A newly found register reloads the entry, so its entities appear.
+* **A recheck can be requested** (button, or the options of a release that has
+  them): it stores the request, so it survives a restart, and reloads the entry.
+  Meant for a unit whose main board was replaced: the identity may stay the
+  same while the served registers change, so a stored "not served" would
+  otherwise never be asked again.
 """
 
 from __future__ import annotations
@@ -29,6 +34,7 @@ import hashlib
 import json
 from typing import TYPE_CHECKING, Any
 
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.helpers.storage import Store
 
 from .const import DOMAIN, LOGGER
@@ -41,6 +47,9 @@ if TYPE_CHECKING:
     from .lg_heatpump_modbus import LgHeatPump, UpdateReport
 
 STORAGE_VERSION = 1
+
+#: The record that stands for "forget the answers and ask again".
+RECHECK_RECORD: dict[str, bool] = {"recheck": True}
 
 #: Sub-systems that must have answered before a silence counts as an answer.
 WITNESS_COMPONENTS: frozenset[str] = frozenset({"controls", "switches"})
@@ -74,12 +83,12 @@ def restore(
 ) -> tuple[dict[str, bool], str]:
     """Return what a stored record lets us believe now, and why.
 
-    ``miss`` (nothing stored), ``invalid``, ``definitions_changed`` and
-    ``identity_changed`` believe nothing; ``positive_only`` believes only the
-    served ones; ``hit`` believes all of it.
+    ``miss`` (nothing stored), ``recheck_requested``, ``invalid``,
+    ``definitions_changed`` and ``identity_changed`` believe nothing;
+    ``positive_only`` believes only the served ones; ``hit`` believes all of it.
     """
-    if not isinstance(record, dict) or not record:
-        return {}, "miss"
+    if not isinstance(record, dict) or not record or record == RECHECK_RECORD:
+        return {}, "recheck_requested" if record == RECHECK_RECORD else "miss"
     if record.get("fingerprint") != current_fingerprint:
         return {}, "definitions_changed"
     stored_identity = record.get("identity")
@@ -96,6 +105,24 @@ def restore(
     if not identity or not stored_identity:
         return {name: True for name, value in clean.items() if value}, "positive_only"
     return clean, "hit"
+
+
+def _store(hass: HomeAssistant, entry_id: str) -> Store[dict[str, Any]]:
+    return Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry_id}.optional_registers")
+
+
+async def async_request_recheck(
+    hass: HomeAssistant, entry: LgHeatPumpConfigEntry
+) -> None:
+    """Forget the stored answers so that the next start asks all of them again.
+
+    The caller reloads the entry (or leaves it to the next start). A running
+    probe is stopped first, so it cannot store its answer over the request.
+    """
+    if entry.state is ConfigEntryState.LOADED:
+        entry.runtime_data.optional_registers.armed = False
+    await _store(hass, entry.entry_id).async_save(dict(RECHECK_RECORD))
+    LOGGER.info("%s: the optional registers will be probed again", entry.title)
 
 
 def pending(support: dict[str, bool]) -> tuple[str, ...]:
@@ -115,9 +142,7 @@ class OptionalRegisters:
         """How :attr:`support` came about: a ``restore`` reason or ``probed``."""
         self.armed = False
         """Whether probing may start; set once setup has finished."""
-        self._store: Store[dict[str, Any]] = Store(
-            hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}.optional_registers"
-        )
+        self._store = _store(hass, entry.entry_id)
 
     async def async_restore(self, device: LgHeatPump) -> None:
         """Load the stored answers and declare the served limits to the device."""
@@ -149,6 +174,8 @@ class OptionalRegisters:
             return
         name = todo[0]
         served = await device.async_probe_limit(name)
+        if not self.armed:
+            return  # a recheck was requested while this probe waited
         if served is None:
             LOGGER.debug("%s: probe of %s hit a link failure", self.entry.title, name)
             return

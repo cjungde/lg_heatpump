@@ -35,6 +35,9 @@
     "button": {
       "refresh": {
         "default": "mdi:refresh"
+      },
+      "recheck_optional_registers": {
+        "default": "mdi:magnify-scan"
       }
     },
     "number": {

@@ -12,10 +12,13 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.lg_heatpump.const import DOMAIN
 from custom_components.lg_heatpump.diagnostics import async_get_config_entry_diagnostics
 from custom_components.lg_heatpump.optional_registers import (
+    RECHECK_RECORD,
+    async_request_recheck,
     fingerprint,
     pending,
     restore,
 )
+from homeassistant.components.button import DOMAIN as BUTTON_DOMAIN, SERVICE_PRESS
 from homeassistant.components.number import (
     ATTR_VALUE,
     DOMAIN as NUMBER_DOMAIN,
@@ -32,6 +35,7 @@ SENSOR = "sensor.lg_therma_v_optional_registers"
 MODULATION = "number.lg_therma_v_maximum_compressor_modulation"
 POWER = "number.lg_therma_v_power_limit"
 ENABLE = "switch.lg_therma_v_power_limit_enable"
+RECHECK = "button.lg_therma_v_recheck_optional_registers"
 LIMIT_READS = {("holding", 23), ("holding", 24), ("coil", 6)}
 SILENT = ModbusTimeoutError("no answer")
 
@@ -105,6 +109,7 @@ def _record(
     [
         (None, IDENTITY, {}, "miss"),
         ({}, IDENTITY, {}, "miss"),
+        (dict(RECHECK_RECORD), IDENTITY, {}, "recheck_requested"),
         (_record(fp="other"), IDENTITY, {}, "definitions_changed"),
         ({"fingerprint": fingerprint(), "identity": 1}, IDENTITY, {}, "invalid"),
         (_record(), {"product_group": 131}, {}, "identity_changed"),
@@ -436,3 +441,93 @@ async def test_diagnostics_show_the_verdicts(
         "source": "hit",
         "served": ["power_limit"],
     }
+
+
+# --- asking again on request --------------------------------------------------
+
+
+def _stored(hass_storage: dict, entry: MockConfigEntry) -> dict:
+    return hass_storage[f"{DOMAIN}.{entry.entry_id}.optional_registers"]["data"]
+
+
+@pytest.mark.usefixtures("patched_connection")
+async def test_the_recheck_button_asks_again_after_a_board_swap(
+    hass: HomeAssistant,
+    mock_unit: MockModbusUnit,
+    mock_config_entry: MockConfigEntry,
+    entity_registry: er.EntityRegistry,
+    hass_storage: dict,
+) -> None:
+    """Same identity, new board: only a requested recheck finds the new register."""
+    await _setup_with_stored(hass, mock_unit, mock_config_entry, hass_storage)
+    button = entity_registry.async_get(RECHECK)
+    assert button is not None
+    assert button.disabled_by is er.RegistryEntryDisabler.INTEGRATION
+    await _enable(hass, entity_registry, mock_config_entry, RECHECK)
+
+    # the new board serves holding 23, the identity stays the same
+    mock_unit.holding[23] = 80
+    _silence(mock_unit, "power_limit", "power_limit_enable")
+    await _poll_settings(hass, mock_config_entry)
+    assert entity_registry.async_get(MODULATION) is None  # the stored answer stands
+
+    mock_unit.read_events.clear()
+    await hass.services.async_call(
+        BUTTON_DOMAIN, SERVICE_PRESS, {ATTR_ENTITY_ID: RECHECK}, blocking=True
+    )
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert mock_config_entry.state is ConfigEntryState.LOADED
+    assert _stored(hass_storage, mock_config_entry) == RECHECK_RECORD
+    state = hass.states.get(SENSOR)
+    assert state.attributes["source"] == "recheck_requested"
+    assert len(state.attributes["pending"]) == 3
+    assert _limit_reads(mock_unit) == []  # nothing during the reload's setup
+
+    await _poll_settings(hass, mock_config_entry)  # finds holding 23, reloads
+
+    assert entity_registry.async_get(MODULATION) is not None
+    assert _stored(hass_storage, mock_config_entry)["support"] == {
+        "compressor_modulation_limit": True
+    }
+
+
+@pytest.mark.usefixtures("patched_connection")
+async def test_a_requested_recheck_survives_a_restart(
+    hass: HomeAssistant,
+    mock_unit: MockModbusUnit,
+    mock_config_entry: MockConfigEntry,
+    hass_storage: dict,
+) -> None:
+    """The request is stored before the reload, so a restart in between keeps it."""
+    await _setup_with_stored(hass, mock_unit, mock_config_entry, hass_storage)
+    await async_request_recheck(hass, mock_config_entry)
+    await hass.config_entries.async_unload(mock_config_entry.entry_id)
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert hass.states.get(SENSOR).attributes["source"] == "recheck_requested"
+
+
+@pytest.mark.usefixtures("patched_connection")
+async def test_a_probe_running_into_a_recheck_does_not_store_its_answer(
+    hass: HomeAssistant,
+    mock_unit: MockModbusUnit,
+    mock_config_entry: MockConfigEntry,
+    hass_storage: dict,
+) -> None:
+    """A request made while a probe waits for its timeout wins over that probe."""
+    await _setup(hass, mock_config_entry)
+    device = mock_config_entry.runtime_data.device
+
+    async def probe_meets_a_recheck(name: str) -> bool:
+        await async_request_recheck(hass, mock_config_entry)
+        return False
+
+    device.async_probe_limit = probe_meets_a_recheck
+    await _poll_settings(hass, mock_config_entry)
+
+    assert _stored(hass_storage, mock_config_entry) == RECHECK_RECORD
+    assert mock_config_entry.runtime_data.optional_registers.support == {}
