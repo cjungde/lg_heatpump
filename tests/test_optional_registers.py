@@ -1,0 +1,407 @@
+"""Tests for the optional limits: probed once, remembered, polled only where served."""
+
+from unittest.mock import patch
+
+from modbus_connection import (
+    IllegalDataAddressError,
+    ModbusConnectionError,
+    ModbusTimeoutError,
+)
+from modbus_connection.mock import MockModbusUnit
+import pytest
+from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+from custom_components.lg_heatpump.const import DOMAIN
+from custom_components.lg_heatpump.diagnostics import async_get_config_entry_diagnostics
+from custom_components.lg_heatpump.optional_registers import (
+    fingerprint,
+    pending,
+    restore,
+)
+from homeassistant.config_entries import ConfigEntryState
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
+
+SENSOR = "sensor.lg_therma_v_optional_registers"
+MODULATION = "number.lg_therma_v_maximum_compressor_modulation"
+POWER = "number.lg_therma_v_power_limit"
+ENABLE = "switch.lg_therma_v_power_limit_enable"
+LIMIT_READS = {("holding", 23), ("holding", 24), ("coil", 6)}
+SILENT = ModbusTimeoutError("no answer")
+
+
+def _silence(unit: MockModbusUnit, *which: str) -> None:
+    """Make the named limits time out, as a unit lacking them does."""
+    places = {
+        "compressor_modulation_limit": ("holding", 23),
+        "power_limit": ("holding", 24),
+        "power_limit_enable": ("coil", 6),
+    }
+    for name in which:
+        space, address = places[name]
+        unit.fail_read(address, SILENT, register_type=space)
+
+
+def _limit_reads(unit: MockModbusUnit) -> list[tuple[str, int]]:
+    return [
+        (e.register_type, e.address)
+        for e in unit.read_events
+        if (e.register_type, e.address) in LIMIT_READS
+    ]
+
+
+async def _poll_settings(hass: HomeAssistant, entry: MockConfigEntry) -> None:
+    await entry.runtime_data.settings.async_refresh()
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+
+async def _setup(hass: HomeAssistant, entry: MockConfigEntry) -> None:
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+
+async def _enable(
+    hass: HomeAssistant,
+    entity_registry: er.EntityRegistry,
+    entry: MockConfigEntry,
+    *entity_ids: str,
+) -> None:
+    for entity_id in entity_ids:
+        entity_registry.async_update_entity(entity_id, disabled_by=None)
+    await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+
+# --- the rules, without Home Assistant ----------------------------------------
+
+
+IDENTITY = {"product_group": 128, "product_info": 8208}
+ALL_FALSE = dict.fromkeys(
+    ("compressor_modulation_limit", "power_limit", "power_limit_enable"), False
+)
+
+
+def _record(
+    identity: dict[str, int] = IDENTITY,
+    support: dict[str, bool] | None = None,
+    fp: str | None = None,
+) -> dict[str, object]:
+    return {
+        "fingerprint": fp or fingerprint(),
+        "identity": identity,
+        "support": ALL_FALSE if support is None else support,
+    }
+
+
+@pytest.mark.parametrize(
+    ("record", "identity", "expected", "reason"),
+    [
+        (None, IDENTITY, {}, "miss"),
+        ({}, IDENTITY, {}, "miss"),
+        (_record(fp="other"), IDENTITY, {}, "definitions_changed"),
+        ({"fingerprint": fingerprint(), "identity": 1}, IDENTITY, {}, "invalid"),
+        (_record(), {"product_group": 131}, {}, "identity_changed"),
+        (_record(), IDENTITY, ALL_FALSE, "hit"),
+        (
+            _record(support={"power_limit": True, "power_limit_enable": False}),
+            {},
+            {"power_limit": True},
+            "positive_only",
+        ),
+        (
+            _record(
+                support={"power_limit": True, "flow": True, "power_limit_enable": 1}
+            ),
+            IDENTITY,
+            {"power_limit": True},
+            "hit",
+        ),
+    ],
+)
+def test_restore_rules(
+    record: object, identity: dict[str, int], expected: dict[str, bool], reason: str
+) -> None:
+    """Stored answers are believed only for the same questions and the same unit."""
+    assert restore(record, fingerprint(), identity) == (expected, reason)
+
+
+def test_pending_keeps_the_probing_order() -> None:
+    """Unknown limits are asked in a fixed order."""
+    assert pending({"power_limit": False}) == (
+        "compressor_modulation_limit",
+        "power_limit_enable",
+    )
+
+
+# --- probing on a live entry ----------------------------------------------------
+
+
+@pytest.mark.usefixtures("patched_connection")
+async def test_a_unit_serving_none_is_probed_once_per_settings_poll(
+    hass: HomeAssistant,
+    mock_unit: MockModbusUnit,
+    mock_config_entry: MockConfigEntry,
+    entity_registry: er.EntityRegistry,
+    hass_storage: dict,
+) -> None:
+    """Three silent registers cost three polls with one timeout each, then never."""
+    _silence(
+        mock_unit, "compressor_modulation_limit", "power_limit", "power_limit_enable"
+    )
+    await _setup(hass, mock_config_entry)
+
+    assert _limit_reads(mock_unit) == []  # nothing during setup
+    state = hass.states.get(SENSOR)
+    assert state.state == "0"
+    assert state.attributes["pending"] == [
+        "compressor_modulation_limit",
+        "power_limit",
+        "power_limit_enable",
+    ]
+
+    for expected in ([("holding", 23)], [("holding", 24)], [("coil", 6)]):
+        mock_unit.read_events.clear()
+        await _poll_settings(hass, mock_config_entry)
+        assert _limit_reads(mock_unit) == expected
+
+    mock_unit.read_events.clear()
+    await _poll_settings(hass, mock_config_entry)
+    assert _limit_reads(mock_unit) == []
+
+    state = hass.states.get(SENSOR)
+    assert state.state == "0"
+    assert state.attributes["source"] == "probed"
+    assert state.attributes["pending"] == []
+    assert state.attributes["power_limit"] is False
+    stored = hass_storage[f"{DOMAIN}.{mock_config_entry.entry_id}.optional_registers"]
+    assert stored["data"]["support"] == ALL_FALSE
+    for entity_id in (MODULATION, POWER, ENABLE):
+        assert entity_registry.async_get(entity_id) is None
+    assert mock_config_entry.state is ConfigEntryState.LOADED
+
+
+@pytest.mark.usefixtures("patched_connection")
+async def test_a_found_register_is_read_and_shown_but_never_written(
+    hass: HomeAssistant,
+    mock_unit: MockModbusUnit,
+    mock_config_entry: MockConfigEntry,
+    entity_registry: er.EntityRegistry,
+) -> None:
+    """A served register is polled with the settings; no entity can write it."""
+    mock_unit.holding[23] = 80
+    _silence(mock_unit, "power_limit", "power_limit_enable")
+    await _setup(hass, mock_config_entry)
+
+    await _poll_settings(hass, mock_config_entry)  # finds holding 23
+
+    assert hass.states.get(SENSOR).attributes["compressor_modulation_limit"] is True
+    assert set(mock_config_entry.runtime_data.device.served_limits) == {
+        "compressor_modulation_limit"
+    }
+    for entity_id in (MODULATION, POWER, ENABLE):
+        assert entity_registry.async_get(entity_id) is None
+
+    writes: list[object] = []
+    mock_unit.on_write(writes.append)
+    mock_unit.read_events.clear()
+    await _poll_settings(hass, mock_config_entry)
+    assert ("holding", 23) in _limit_reads(mock_unit)
+    diagnostics = await async_get_config_entry_diagnostics(hass, mock_config_entry)
+    assert diagnostics["values"]["limits"]["compressor_modulation_limit"] == 80
+    assert writes == []
+
+
+async def _setup_with_stored(
+    hass: HomeAssistant,
+    unit: MockModbusUnit,
+    entry: MockConfigEntry,
+    hass_storage: dict,
+    **served: bool,
+) -> None:
+    """Set up with answers stored for this unit's identity."""
+    support = {**ALL_FALSE, **served}
+    hass_storage[f"{DOMAIN}.{entry.entry_id}.optional_registers"] = {
+        "version": 1,
+        "key": f"{DOMAIN}.{entry.entry_id}.optional_registers",
+        "data": _record(identity=_identity(unit), support=support),
+    }
+    await _setup(hass, entry)
+
+
+def _identity(unit: MockModbusUnit) -> dict[str, int]:
+    return {
+        "product_group": int(unit.input.get(9997, 0)),
+        "product_info": int(unit.input.get(9998, 0)),
+    }
+
+
+@pytest.mark.usefixtures("patched_connection")
+async def test_stored_answers_for_the_same_unit_need_no_probe(
+    hass: HomeAssistant,
+    mock_unit: MockModbusUnit,
+    mock_config_entry: MockConfigEntry,
+    hass_storage: dict,
+) -> None:
+    """A restart believes the stored answers and asks nothing."""
+    await _setup_with_stored(hass, mock_unit, mock_config_entry, hass_storage)
+    mock_unit.read_events.clear()
+
+    await _poll_settings(hass, mock_config_entry)
+
+    assert _limit_reads(mock_unit) == []
+    assert hass.states.get(SENSOR).attributes["source"] == "hit"
+
+
+@pytest.mark.usefixtures("patched_connection")
+async def test_another_unit_is_asked_again(
+    hass: HomeAssistant,
+    mock_unit: MockModbusUnit,
+    mock_config_entry: MockConfigEntry,
+    hass_storage: dict,
+) -> None:
+    """Answers stored for a different identity are discarded."""
+    hass_storage[f"{DOMAIN}.{mock_config_entry.entry_id}.optional_registers"] = {
+        "version": 1,
+        "key": "x",
+        "data": _record(identity={"product_group": 1, "product_info": 2}),
+    }
+    _silence(mock_unit, "compressor_modulation_limit")
+    await _setup(hass, mock_config_entry)
+
+    assert hass.states.get(SENSOR).attributes["source"] == "identity_changed"
+    mock_unit.read_events.clear()
+    await _poll_settings(hass, mock_config_entry)
+    assert _limit_reads(mock_unit) == [("holding", 23)]
+
+
+@pytest.mark.usefixtures("patched_connection")
+async def test_a_unit_without_identity_keeps_only_positives(
+    hass: HomeAssistant,
+    mock_unit: MockModbusUnit,
+    mock_config_entry: MockConfigEntry,
+    hass_storage: dict,
+) -> None:
+    """Without 9997/9998 a stored "not served" is asked again, a "served" kept."""
+    mock_unit.fail_read(9997, IllegalDataAddressError(), register_type="input")
+    hass_storage[f"{DOMAIN}.{mock_config_entry.entry_id}.optional_registers"] = {
+        "version": 1,
+        "key": "x",
+        "data": _record(identity={}, support={**ALL_FALSE, "power_limit": True}),
+    }
+    await _setup(hass, mock_config_entry)
+
+    attributes = hass.states.get(SENSOR).attributes
+    assert attributes["source"] == "positive_only"
+    assert attributes["power_limit"] is True
+    assert attributes["pending"] == [
+        "compressor_modulation_limit",
+        "power_limit_enable",
+    ]
+    assert mock_config_entry.runtime_data.device.served_limits == ("power_limit",)
+
+
+@pytest.mark.usefixtures("patched_connection")
+async def test_a_link_failure_is_no_answer(
+    hass: HomeAssistant,
+    mock_unit: MockModbusUnit,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """A probe that hits a dead link is repeated, not remembered as absent."""
+    mock_unit.fail_read(23, ModbusConnectionError("gone"))
+    await _setup(hass, mock_config_entry)
+
+    await _poll_settings(hass, mock_config_entry)
+    assert hass.states.get(SENSOR).attributes["compressor_modulation_limit"] is None
+
+    mock_unit.fail_read(23, None)
+    _silence(mock_unit, "compressor_modulation_limit")
+    await _poll_settings(hass, mock_config_entry)
+    assert hass.states.get(SENSOR).attributes["compressor_modulation_limit"] is False
+
+
+@pytest.mark.usefixtures("patched_connection")
+async def test_no_probe_after_an_incomplete_settings_poll(
+    hass: HomeAssistant,
+    mock_unit: MockModbusUnit,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Without a full poll as witness, a silence proves nothing."""
+    _silence(mock_unit, "compressor_modulation_limit")
+    await _setup(hass, mock_config_entry)
+    mock_unit.fail_read(0, IllegalDataAddressError())  # controls block
+
+    mock_unit.read_events.clear()
+    await _poll_settings(hass, mock_config_entry)
+
+    assert _limit_reads(mock_unit) == []
+    assert hass.states.get(SENSOR).attributes["compressor_modulation_limit"] is None
+
+
+@pytest.mark.usefixtures("patched_connection")
+async def test_diagnostics_show_the_verdicts(
+    hass: HomeAssistant,
+    mock_unit: MockModbusUnit,
+    mock_config_entry: MockConfigEntry,
+    hass_storage: dict,
+) -> None:
+    """The download says what was decided and why."""
+    await _setup_with_stored(
+        hass, mock_unit, mock_config_entry, hass_storage, power_limit=True
+    )
+
+    diagnostics = await async_get_config_entry_diagnostics(hass, mock_config_entry)
+
+    assert diagnostics["optional_registers"] == {
+        "support": {**ALL_FALSE, "power_limit": True},
+        "source": "hit",
+        "served": ["power_limit"],
+    }
+
+
+# --- a lost or unwritable store only costs probes -----------------------------
+
+STORE_CLASS = "homeassistant.helpers.storage.Store"
+
+
+@pytest.mark.usefixtures("patched_connection")
+async def test_an_unreadable_store_means_asking_again(
+    hass: HomeAssistant,
+    mock_unit: MockModbusUnit,
+    mock_config_entry: MockConfigEntry,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A store that cannot be read is treated as empty, not as a failed setup."""
+    _silence(mock_unit, "compressor_modulation_limit")
+    with patch(f"{STORE_CLASS}.async_load", side_effect=OSError("disk")):
+        await _setup(hass, mock_config_entry)
+
+    assert mock_config_entry.state is ConfigEntryState.LOADED
+    assert "cannot read the stored optional registers" in caplog.text
+    assert hass.states.get(SENSOR).attributes["source"] == "miss"
+    mock_unit.read_events.clear()
+    await _poll_settings(hass, mock_config_entry)
+    assert _limit_reads(mock_unit) == [("holding", 23)]
+
+
+@pytest.mark.usefixtures("patched_connection")
+async def test_an_unwritable_store_keeps_the_answer_for_this_run(
+    hass: HomeAssistant,
+    mock_unit: MockModbusUnit,
+    mock_config_entry: MockConfigEntry,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A failed save is logged; the answer still holds until the next start."""
+    _silence(mock_unit, "compressor_modulation_limit")
+    await _setup(hass, mock_config_entry)
+
+    with patch(f"{STORE_CLASS}.async_save", side_effect=OSError("disk full")):
+        await _poll_settings(hass, mock_config_entry)
+
+    assert "cannot store the optional registers" in caplog.text
+    state = hass.states.get(SENSOR)
+    assert state.attributes["compressor_modulation_limit"] is False
+    assert state.attributes["source"] == "probed"
+    mock_unit.read_events.clear()
+    await _poll_settings(hass, mock_config_entry)
+    assert ("holding", 23) not in _limit_reads(mock_unit)

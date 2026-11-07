@@ -226,6 +226,29 @@
       },
       "water_temperature_drop_circuit_2": {
         "name": "Circuit 2 temperature drop"
+      },
+      "optional_registers": {
+        "name": "Optional registers",
+        "state_attributes": {
+          "compressor_modulation_limit": {
+            "name": "Maximum compressor modulation"
+          },
+          "power_limit": {
+            "name": "Power limit"
+          },
+          "power_limit_enable": {
+            "name": "Power limit enable"
+          },
+          "source": {
+            "name": "Source"
+          },
+          "pending": {
+            "name": "Pending"
+          },
+          "addresses": {
+            "name": "Addresses"
+          }
+        }
       }
     },
     "switch": {

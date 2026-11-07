@@ -37,6 +37,11 @@ async def async_get_config_entry_diagnostics(
                 "updated": runtime_data.settings.data.updated,
                 "failed": sorted(runtime_data.settings.data.failed),
             },
+            "optional_registers": {
+                "support": runtime_data.optional_registers.support,
+                "source": runtime_data.optional_registers.source,
+                "served": list(device.served_limits),
+            },
             "values": {
                 name: getattr(device, name).values() for name in device.component_names
             },

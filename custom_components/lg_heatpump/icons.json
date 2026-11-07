@@ -71,6 +71,9 @@
       },
       "water_temperature_drop_circuit_2": {
         "default": "mdi:thermometer-chevron-down"
+      },
+      "optional_registers": {
+        "default": "mdi:format-list-checks"
       }
     },
     "switch": {
