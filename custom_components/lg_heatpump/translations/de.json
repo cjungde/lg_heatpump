@@ -107,6 +107,9 @@
     "button": {
       "refresh": {
         "name": "Daten jetzt aktualisieren"
+      },
+      "recheck_optional_registers": {
+        "name": "Optionale Register neu prüfen"
       }
     },
     "climate": {

@@ -107,6 +107,9 @@
     "button": {
       "refresh": {
         "name": "Refresh data now"
+      },
+      "recheck_optional_registers": {
+        "name": "Recheck optional registers"
       }
     },
     "climate": {
