@@ -117,6 +117,12 @@
     "number": {
       "shift_in_auto_mode": {
         "name": "Circuit {circuit} setpoint shift"
+      },
+      "compressor_modulation_limit": {
+        "name": "Maximum compressor modulation"
+      },
+      "power_limit": {
+        "name": "Power limit"
       }
     },
     "select": {
@@ -237,6 +243,29 @@
       },
       "water_temperature_drop_circuit_2": {
         "name": "Circuit 2 temperature drop"
+      },
+      "optional_registers": {
+        "name": "Optional registers",
+        "state_attributes": {
+          "compressor_modulation_limit": {
+            "name": "Maximum compressor modulation"
+          },
+          "power_limit": {
+            "name": "Power limit"
+          },
+          "power_limit_enable": {
+            "name": "Power limit enable"
+          },
+          "source": {
+            "name": "Source"
+          },
+          "pending": {
+            "name": "Pending"
+          },
+          "addresses": {
+            "name": "Addresses"
+          }
+        }
       }
     },
     "switch": {
@@ -254,6 +283,9 @@
       },
       "trigger_emergency_operation": {
         "name": "Trigger emergency operation"
+      },
+      "power_limit_enable": {
+        "name": "Power limit enable"
       }
     },
     "water_heater": {
@@ -271,6 +303,9 @@
     },
     "no_component_answered": {
       "message": "The heat pump did not answer any of the registers that were read."
+    },
+    "invalid_value": {
+      "message": "The value cannot be set: {error}"
     }
   },
   "options": {

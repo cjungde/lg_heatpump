@@ -117,6 +117,12 @@
     "number": {
       "shift_in_auto_mode": {
         "name": "Sollwertverschiebung Heizkreis {circuit}"
+      },
+      "compressor_modulation_limit": {
+        "name": "Maximale Verdichtermodulation"
+      },
+      "power_limit": {
+        "name": "Leistungsgrenze"
       }
     },
     "select": {
@@ -237,6 +243,29 @@
       },
       "water_temperature_drop_circuit_2": {
         "name": "Temperaturabfall Heizkreis 2"
+      },
+      "optional_registers": {
+        "name": "Optionale Register",
+        "state_attributes": {
+          "compressor_modulation_limit": {
+            "name": "Maximale Verdichtermodulation"
+          },
+          "power_limit": {
+            "name": "Leistungsgrenze"
+          },
+          "power_limit_enable": {
+            "name": "Leistungsgrenze aktiv"
+          },
+          "source": {
+            "name": "Herkunft"
+          },
+          "pending": {
+            "name": "Ausstehend"
+          },
+          "addresses": {
+            "name": "Adressen"
+          }
+        }
       }
     },
     "switch": {
@@ -254,6 +283,9 @@
       },
       "trigger_emergency_operation": {
         "name": "Notbetrieb auslösen"
+      },
+      "power_limit_enable": {
+        "name": "Leistungsgrenze aktiv"
       }
     },
     "water_heater": {
@@ -271,6 +303,9 @@
     },
     "no_component_answered": {
       "message": "Die Wärmepumpe hat auf keines der gelesenen Register geantwortet."
+    },
+    "invalid_value": {
+      "message": "Der Wert kann nicht gesetzt werden: {error}"
     }
   },
   "options": {

@@ -27,6 +27,9 @@ from .lg_heatpump_modbus.logic import (
     OilReturnPulseTracker,
 )
 
+#: The sub-system of the optional limits, polled with the settings once served.
+LIMITS_COMPONENT = "limits"
+
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
     from datetime import timedelta
@@ -35,6 +38,7 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
     from .lg_heatpump_modbus import LgHeatPump
+    from .optional_registers import OptionalRegisters
 
 type LgHeatPumpConfigEntry = ConfigEntry[LgHeatPumpRuntimeData]
 
@@ -71,6 +75,8 @@ class LgHeatPumpCoordinator(DataUpdateCoordinator[UpdateReport]):
         """Follows the ORP (oil return pulse); set by the setup if the option is on."""
         self.last_poll_time: datetime | None = None
         """When the last poll finished, whether it succeeded or not."""
+        self.optional_registers: OptionalRegisters | None = None
+        """Probes the optional limits after a poll; set on the settings poll only."""
 
     @callback
     @override
@@ -113,6 +119,8 @@ class LgHeatPumpCoordinator(DataUpdateCoordinator[UpdateReport]):
         self._log_transitions(report)
         if self.oil_return_pulse is not None:
             self._track_oil_return_pulse(report)
+        if self.optional_registers is not None:
+            await self.optional_registers.async_after_settings_poll(self.device, report)
         return report
 
     def _track_oil_return_pulse(self, report: UpdateReport) -> None:
@@ -200,7 +208,10 @@ class LgHeatPumpRuntimeData:
     device: LgHeatPump
     readings: LgHeatPumpCoordinator
     settings: LgHeatPumpCoordinator
+    optional_registers: OptionalRegisters
 
     def coordinator_for(self, component: str) -> LgHeatPumpCoordinator:
         """Return the coordinator that owns a sub-system's data."""
-        return self.settings if component in SETTING_COMPONENTS else self.readings
+        if component in SETTING_COMPONENTS or component == LIMITS_COMPONENT:
+            return self.settings
+        return self.readings

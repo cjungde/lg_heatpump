@@ -40,6 +40,12 @@
     "number": {
       "shift_in_auto_mode": {
         "default": "mdi:altimeter"
+      },
+      "compressor_modulation_limit": {
+        "default": "mdi:speedometer-slow"
+      },
+      "power_limit": {
+        "default": "mdi:flash-alert"
       }
     },
     "select": {
@@ -77,6 +83,9 @@
       },
       "water_temperature_drop_circuit_2": {
         "default": "mdi:thermometer-chevron-down"
+      },
+      "optional_registers": {
+        "default": "mdi:format-list-checks"
       }
     },
     "switch": {
@@ -94,6 +103,9 @@
       },
       "trigger_emergency_operation": {
         "default": "mdi:alert"
+      },
+      "power_limit_enable": {
+        "default": "mdi:flash-off"
       }
     }
   }
