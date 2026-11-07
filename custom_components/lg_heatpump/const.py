@@ -13,6 +13,8 @@ CONF_UNIT_ID: Final = "unit_id"
 CONF_MODEL: Final = "model"
 CONF_DEBUG: Final = "debug"
 CONF_SCAN_INTERVAL: Final = "scan_interval"
+# A one-shot action in the options form, never stored with the options.
+CONF_RECHECK_OPTIONAL: Final = "recheck_optional_registers"
 
 DEFAULT_PORT: Final = 502
 DEFAULT_UNIT_ID: Final = 1

@@ -304,10 +304,12 @@
     "step": {
       "init": {
         "data": {
-          "scan_interval": "Measurement interval"
+          "scan_interval": "Measurement interval",
+          "recheck_optional_registers": "Recheck optional registers"
         },
         "data_description": {
-          "scan_interval": "How often the measurements (temperatures, flow, compressor) are read, in seconds. The default is 10. A longer interval puts less load on a Modbus connection that other devices may share, but can miss short events such as the compressor oil-return pulse."
+          "scan_interval": "How often the measurements (temperatures, flow, compressor) are read, in seconds. The default is 10. A longer interval puts less load on a Modbus connection that other devices may share, but can miss short events such as the compressor oil-return pulse.",
+          "recheck_optional_registers": "Asks the unit again which optional limits (holding 23/24, coil 6) it serves, for example after its main board was replaced. Each register the unit does not serve costs one request timeout, spread over the next settings polls. Not stored: the box is clear again next time."
         }
       }
     }

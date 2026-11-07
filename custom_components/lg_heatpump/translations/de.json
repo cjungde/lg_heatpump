@@ -304,10 +304,12 @@
     "step": {
       "init": {
         "data": {
-          "scan_interval": "Messintervall"
+          "scan_interval": "Messintervall",
+          "recheck_optional_registers": "Optionale Register neu prüfen"
         },
         "data_description": {
-          "scan_interval": "Wie oft die Messwerte (Temperaturen, Durchfluss, Verdichter) gelesen werden, in Sekunden. Standard ist 10. Ein längeres Intervall belastet eine Modbus-Verbindung, die sich andere Geräte teilen können, weniger, kann aber kurze Ereignisse wie den Spülpuls des Verdichters verpassen."
+          "scan_interval": "Wie oft die Messwerte (Temperaturen, Durchfluss, Verdichter) gelesen werden, in Sekunden. Standard ist 10. Ein längeres Intervall belastet eine Modbus-Verbindung, die sich andere Geräte teilen können, weniger, kann aber kurze Ereignisse wie den Spülpuls des Verdichters verpassen.",
+          "recheck_optional_registers": "Fragt die Anlage erneut, welche optionalen Limits (Holding 23/24, Coil 6) sie bedient, etwa nach dem Tausch der Hauptplatine. Jedes Register, das die Anlage nicht bedient, kostet eine Anfrage-Zeitüberschreitung, verteilt auf die nächsten Einstellungs-Polls. Wird nicht gespeichert: das Häkchen ist beim nächsten Öffnen wieder leer."
         }
       }
     }

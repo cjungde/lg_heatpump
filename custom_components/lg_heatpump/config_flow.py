@@ -32,6 +32,7 @@ from .connection import create_modbus_params
 from .const import (
     CONF_DEBUG,
     CONF_MODEL,
+    CONF_RECHECK_OPTIONAL,
     CONF_SCAN_INTERVAL,
     CONF_UNIT_ID,
     DEFAULT_PORT,
@@ -42,6 +43,7 @@ from .const import (
     SCAN_INTERVAL,
 )
 from .lg_heatpump_modbus import MODELS, LgHeatPump
+from .optional_registers import async_request_recheck
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -104,7 +106,15 @@ class LgHeatPumpOptionsFlow(OptionsFlowWithReload):
     ) -> ConfigFlowResult:
         """Choose the measurement interval; the entry reloads to apply it."""
         if user_input is not None:
-            return self.async_create_entry(data=user_input)
+            options = dict(user_input)
+            if options.pop(CONF_RECHECK_OPTIONAL, False):
+                await async_request_recheck(self.hass, self.config_entry)
+                if options == dict(self.config_entry.options):
+                    # Nothing else changed, so no automatic reload follows.
+                    self.hass.config_entries.async_schedule_reload(
+                        self.config_entry.entry_id
+                    )
+            return self.async_create_entry(data=options)
 
         return self.async_show_form(
             step_id="init",
@@ -125,6 +135,9 @@ class LgHeatPumpOptionsFlow(OptionsFlowWithReload):
                             ),
                             vol.Coerce(int),
                         ),
+                        vol.Required(
+                            CONF_RECHECK_OPTIONAL, default=False
+                        ): BooleanSelector(),
                     }
                 ),
                 self.config_entry.options,

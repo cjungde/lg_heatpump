@@ -134,7 +134,8 @@ identity (input 9997/9998), they are asked again.
 
 A replaced main board may serve registers the old one did not, while reporting
 the same identity. For that case the diagnostic button **Recheck optional
-registers** (disabled by default) forgets the answers and reloads the entry; the
+registers** (disabled by default), or the box of the same name in the
+integration's options, forgets the answers and reloads the entry; the
 three registers are then asked again as after a first setup. The request is
 stored first, so a restart in between does not lose it.
 
