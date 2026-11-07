@@ -214,6 +214,9 @@
       "water_flow_rate": {
         "name": "Water flow rate"
       },
+      "water_flow_rate_raw": {
+        "name": "Water flow rate (raw)"
+      },
       "water_pressure": {
         "name": "Water pressure"
       },

@@ -214,6 +214,9 @@
       "water_flow_rate": {
         "name": "Durchflussrate"
       },
+      "water_flow_rate_raw": {
+        "name": "Durchflussrate (Rohwert)"
+      },
       "water_pressure": {
         "name": "Wasserdruck"
       },
