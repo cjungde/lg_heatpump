@@ -489,6 +489,7 @@ async def test_the_recheck_button_asks_again_after_a_board_swap(
     assert entity_registry.async_get(MODULATION) is None  # the stored answer stands
 
     mock_unit.read_events.clear()
+    before = mock_config_entry.runtime_data.journal
     await hass.services.async_call(
         BUTTON_DOMAIN, SERVICE_PRESS, {ATTR_ENTITY_ID: RECHECK}, blocking=True
     )
@@ -496,8 +497,14 @@ async def test_the_recheck_button_asks_again_after_a_board_swap(
 
     assert mock_config_entry.state is ConfigEntryState.LOADED
     assert _stored(hass_storage, mock_config_entry) == RECHECK_RECORD
-    events = mock_config_entry.runtime_data.journal.events
-    assert [e["event"] for e in events].count("recheck_requested") == 1
+    # noted in the run that was asked; the reload starts a new journal
+    assert [e["event"] for e in before.events].count("recheck_requested") == 1
+    restored = [
+        e
+        for e in mock_config_entry.runtime_data.journal.events
+        if e["event"] == "optional_registers"
+    ]
+    assert [e["source"] for e in restored] == ["recheck_requested"]
     state = hass.states.get(SENSOR)
     assert state.attributes["source"] == "recheck_requested"
     assert len(state.attributes["pending"]) == 3

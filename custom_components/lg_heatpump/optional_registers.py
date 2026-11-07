@@ -38,13 +38,13 @@ from homeassistant.config_entries import ConfigEntryState
 from homeassistant.helpers.storage import Store
 
 from .const import DOMAIN, LOGGER
-from .journal import journal_for
 from .lg_heatpump_modbus import LIMIT_DATAPOINTS
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
     from .coordinator import LgHeatPumpConfigEntry
+    from .journal import Journal
     from .lg_heatpump_modbus import LgHeatPump, UpdateReport
 
 STORAGE_VERSION = 1
@@ -122,8 +122,8 @@ async def async_request_recheck(
     """
     if entry.state is ConfigEntryState.LOADED:
         entry.runtime_data.optional_registers.armed = False
+        entry.runtime_data.journal.event("recheck_requested")
     await _store(hass, entry.entry_id).async_save(dict(RECHECK_RECORD))
-    journal_for(hass, entry).event("recheck_requested")
     LOGGER.info("%s: the optional registers will be probed again", entry.title)
 
 
@@ -144,6 +144,8 @@ class OptionalRegisters:
         """How :attr:`support` came about: a ``restore`` reason or ``probed``."""
         self.armed = False
         """Whether probing may start; set once setup has finished."""
+        self.journal: Journal | None = None
+        """Where restores and probes are noted; set by the setup."""
         self._store = _store(hass, entry.entry_id)
 
     async def async_restore(self, device: LgHeatPump) -> None:
@@ -158,7 +160,7 @@ class OptionalRegisters:
             )
             record = None
         self.support, self.source = restore(record, fingerprint(), identity_of(device))
-        journal_for(self.hass, self.entry).event(
+        self._event(
             "optional_registers", source=self.source, support=dict(self.support)
         )
         LOGGER.debug(
@@ -181,7 +183,7 @@ class OptionalRegisters:
         served = await device.async_probe_limit(name)
         if not self.armed:
             return  # a recheck was requested while this probe waited
-        journal_for(self.hass, self.entry).event("probe", register=name, served=served)
+        self._event("probe", register=name, served=served)
         if served is None:
             LOGGER.debug("%s: probe of %s hit a link failure", self.entry.title, name)
             return
@@ -200,6 +202,10 @@ class OptionalRegisters:
         if served:
             # The entity for it exists only after a reload.
             self.hass.config_entries.async_schedule_reload(self.entry.entry_id)
+
+    def _event(self, kind: str, **details: Any) -> None:
+        if self.journal is not None:
+            self.journal.event(kind, **details)
 
     async def _async_save(self, device: LgHeatPump) -> None:
         try:
