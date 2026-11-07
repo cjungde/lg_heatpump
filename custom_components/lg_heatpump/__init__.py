@@ -8,6 +8,7 @@ For more details, see https://github.com/lg-heatpump/lg_heatpump
 
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import TYPE_CHECKING
 
 from homeassistant.components.modbus import async_get_unit
@@ -17,6 +18,7 @@ from .connection import create_modbus_params
 from .const import (
     CONF_DEBUG,
     CONF_MODEL,
+    CONF_SCAN_INTERVAL,
     CONF_UNIT_ID,
     LOGGER,
     REQUEST_TIMEOUT,
@@ -70,8 +72,11 @@ async def async_setup_entry(
         debug=entry.data.get(CONF_DEBUG, False),
     )
 
+    interval = timedelta(
+        seconds=entry.options.get(CONF_SCAN_INTERVAL, SCAN_INTERVAL.total_seconds())
+    )
     readings = LgHeatPumpCoordinator(
-        hass, entry, device, device.async_update_readings, SCAN_INTERVAL
+        hass, entry, device, device.async_update_readings, interval
     )
     settings = LgHeatPumpCoordinator(
         hass, entry, device, device.async_update_settings, SETTINGS_SCAN_INTERVAL

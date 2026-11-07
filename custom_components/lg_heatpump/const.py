@@ -12,6 +12,7 @@ LOGGER: Final = logging.getLogger(__package__)
 CONF_UNIT_ID: Final = "unit_id"
 CONF_MODEL: Final = "model"
 CONF_DEBUG: Final = "debug"
+CONF_SCAN_INTERVAL: Final = "scan_interval"
 
 DEFAULT_PORT: Final = 502
 DEFAULT_UNIT_ID: Final = 1
@@ -21,6 +22,9 @@ MANUFACTURER: Final = "LG"
 # A heat pump changes slowly, but the compressor and the pumps do not: poll the
 # measurements often and the setpoints rarely.
 SCAN_INTERVAL: Final = timedelta(seconds=10)
+# Bounds of the measurement interval a user may choose in the options.
+MIN_SCAN_INTERVAL: Final = 5
+MAX_SCAN_INTERVAL: Final = 600
 SETTINGS_SCAN_INTERVAL: Final = timedelta(seconds=60)
 
 # Per-request timeout floor, in seconds, asked of the shared Modbus link.

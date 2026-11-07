@@ -8,8 +8,14 @@ from modbus_connection import ModbusError
 import voluptuous as vol
 
 from homeassistant.components.modbus import async_get_temporary_unit
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
+from homeassistant.config_entries import (
+    ConfigEntry,
+    ConfigFlow,
+    ConfigFlowResult,
+    OptionsFlowWithReload,
+)
 from homeassistant.const import CONF_HOST, CONF_PORT
+from homeassistant.core import callback
 from homeassistant.helpers.selector import (
     BooleanSelector,
     NumberSelector,
@@ -26,10 +32,14 @@ from .connection import create_modbus_params
 from .const import (
     CONF_DEBUG,
     CONF_MODEL,
+    CONF_SCAN_INTERVAL,
     CONF_UNIT_ID,
     DEFAULT_PORT,
     DEFAULT_UNIT_ID,
     DOMAIN,
+    MAX_SCAN_INTERVAL,
+    MIN_SCAN_INTERVAL,
+    SCAN_INTERVAL,
 )
 from .lg_heatpump_modbus import MODELS, LgHeatPump
 
@@ -85,10 +95,55 @@ async def _async_probe(hass: HomeAssistant, data: dict[str, Any]) -> LgHeatPump:
     return device
 
 
+class LgHeatPumpOptionsFlow(OptionsFlowWithReload):
+    """Let the user tune how often the measurements are polled."""
+
+    async def async_step_init(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> ConfigFlowResult:
+        """Choose the measurement interval; the entry reloads to apply it."""
+        if user_input is not None:
+            return self.async_create_entry(data=user_input)
+
+        return self.async_show_form(
+            step_id="init",
+            data_schema=self.add_suggested_values_to_schema(
+                vol.Schema(
+                    {
+                        vol.Required(
+                            CONF_SCAN_INTERVAL,
+                            default=int(SCAN_INTERVAL.total_seconds()),
+                        ): vol.All(
+                            NumberSelector(
+                                NumberSelectorConfig(
+                                    mode=NumberSelectorMode.BOX,
+                                    min=MIN_SCAN_INTERVAL,
+                                    max=MAX_SCAN_INTERVAL,
+                                    unit_of_measurement="s",
+                                )
+                            ),
+                            vol.Coerce(int),
+                        ),
+                    }
+                ),
+                self.config_entry.options,
+            ),
+        )
+
+
 class LgHeatPumpConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for an LG heat pump."""
 
     VERSION = 1
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(
+        config_entry: ConfigEntry,  # noqa: ARG004
+    ) -> LgHeatPumpOptionsFlow:
+        """Return the options flow for a configured heat pump."""
+        return LgHeatPumpOptionsFlow()
 
     async def async_step_user(
         self,

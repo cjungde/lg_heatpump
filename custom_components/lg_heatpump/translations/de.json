@@ -269,5 +269,17 @@
     "no_component_answered": {
       "message": "Die Wärmepumpe hat auf keines der gelesenen Register geantwortet."
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "data": {
+          "scan_interval": "Messintervall"
+        },
+        "data_description": {
+          "scan_interval": "Wie oft die Messwerte (Temperaturen, Durchfluss, Verdichter) gelesen werden, in Sekunden. Standard ist 10. Ein längeres Intervall belastet eine Modbus-Verbindung, die sich andere Geräte teilen können, weniger, kann aber kurze Ereignisse wie den Spülpuls des Verdichters verpassen."
+        }
+      }
+    }
   }
 }
