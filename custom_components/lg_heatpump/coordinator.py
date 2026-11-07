@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+import time
 from typing import TYPE_CHECKING, override
 
 from modbus_connection import ModbusError
@@ -19,6 +20,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from homeassistant.util.dt import utcnow
 
 from .const import DOMAIN, EVENT_ORP, LOGGER, MANUFACTURER
+from .journal import outcome_of
 from .lg_heatpump_modbus import SETTING_COMPONENTS, UpdateReport
 from .lg_heatpump_modbus.logic import (
     EVENT_CANCELLED,
@@ -37,6 +39,7 @@ if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
+    from .journal import Journal
     from .lg_heatpump_modbus import LgHeatPump
     from .optional_registers import OptionalRegisters
 
@@ -70,6 +73,10 @@ class LgHeatPumpCoordinator(DataUpdateCoordinator[UpdateReport]):
         )
         self.device = device
         self._poll = poll
+        self.journal: Journal | None = None
+        """Where each poll is summarised; set by the setup."""
+        self.journal_table = ""
+        """Which table this coordinator polls, as the journal names it."""
         self._consecutive_failures: dict[str, int] = {}
         self.oil_return_pulse: OilReturnPulseTracker | None = None
         """Follows the ORP (oil return pulse); set by the setup if the option is on."""
@@ -99,9 +106,17 @@ class LgHeatPumpCoordinator(DataUpdateCoordinator[UpdateReport]):
 
     async def _async_update_data(self) -> UpdateReport:
         """Poll the heat pump, or fail the update if nothing answered."""
+        start = time.monotonic()
         try:
             report = await self._poll()
         except ModbusError as error:
+            if self.journal is not None:
+                self.journal.poll(
+                    self.journal_table, time.monotonic() - start, error=error
+                )
+                self.journal.event(
+                    "link_error", table=self.journal_table, error=outcome_of(error)
+                )
             # A dead link or a device that answers nothing reaches here; a
             # single refused block lands in report.failed instead.
             raise UpdateFailed(
@@ -109,6 +124,13 @@ class LgHeatPumpCoordinator(DataUpdateCoordinator[UpdateReport]):
                 translation_key="modbus_error",
                 translation_placeholders={"error": str(error)},
             ) from error
+        if self.journal is not None:
+            self.journal.poll(
+                self.journal_table,
+                time.monotonic() - start,
+                updated=report.updated,
+                failed=report.failed,
+            )
         if not report.updated:
             raise UpdateFailed(
                 translation_domain=DOMAIN,
@@ -191,6 +213,10 @@ class LgHeatPumpCoordinator(DataUpdateCoordinator[UpdateReport]):
             previous = self._consecutive_failures.get(name, 0)
             self._consecutive_failures[name] = previous + 1
             if previous == 0:
+                if self.journal is not None:
+                    self.journal.event(
+                        "failed", component=name, cause=outcome_of(cause)
+                    )
                 LOGGER.warning(
                     "%s: %s failed to refresh and is keeping its previous values: %s",
                     self.name,
@@ -198,7 +224,9 @@ class LgHeatPumpCoordinator(DataUpdateCoordinator[UpdateReport]):
                     cause,
                 )
         for name in report.updated:
-            if self._consecutive_failures.pop(name, None) is not None:
+            if (failures := self._consecutive_failures.pop(name, None)) is not None:
+                if self.journal is not None:
+                    self.journal.event("recovered", component=name, after=failures)
                 LOGGER.info("%s: %s is available again", self.name, name)
 
 
@@ -210,6 +238,7 @@ class LgHeatPumpRuntimeData:
     readings: LgHeatPumpCoordinator
     settings: LgHeatPumpCoordinator
     optional_registers: OptionalRegisters
+    journal: Journal
 
     def coordinator_for(self, component: str) -> LgHeatPumpCoordinator:
         """Return the coordinator that owns a sub-system's data."""

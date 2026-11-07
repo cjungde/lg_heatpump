@@ -29,6 +29,7 @@ from .const import (
     SETTINGS_SCAN_INTERVAL,
 )
 from .coordinator import LgHeatPumpCoordinator, LgHeatPumpRuntimeData
+from .journal import RecordingUnit, forget_journal, journal_for
 from .lg_heatpump_modbus import LgHeatPump
 from .lg_heatpump_modbus.logic import OilReturnPulseConfig, OilReturnPulseTracker
 from .optional_registers import OptionalRegisters
@@ -71,8 +72,10 @@ async def async_setup_entry(
         LOGGER.debug(
             "modbus-connection has no require_timeout; keeping the default timeout"
         )
+    journal = journal_for(hass, entry)
+    journal.event("setup", model=entry.data[CONF_MODEL])
     device = LgHeatPump(
-        unit,
+        RecordingUnit(unit, journal),
         model=entry.data[CONF_MODEL],
         debug=entry.data.get(CONF_DEBUG, False),
     )
@@ -93,6 +96,9 @@ async def async_setup_entry(
         hass, entry, device, device.async_update_settings, SETTINGS_SCAN_INTERVAL
     )
 
+    readings.journal, readings.journal_table = journal, "readings"
+    settings.journal, settings.journal_table = journal, "settings"
+
     await readings.async_config_entry_first_refresh()
     # The first readings poll read the unit's identity, which decides whether the
     # stored answers about the optional limits still apply. Restored before the
@@ -102,7 +108,9 @@ async def async_setup_entry(
     settings.optional_registers = optional
     await settings.async_config_entry_first_refresh()
 
-    entry.runtime_data = LgHeatPumpRuntimeData(device, readings, settings, optional)
+    entry.runtime_data = LgHeatPumpRuntimeData(
+        device, readings, settings, optional, journal=journal
+    )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     # Probing starts with the next settings poll, never during setup.
@@ -116,3 +124,11 @@ async def async_unload_entry(
 ) -> bool:
     """Unload a config entry; the shared connection closes with its last holder."""
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+
+
+async def async_remove_entry(
+    hass: HomeAssistant,
+    entry: LgHeatPumpConfigEntry,
+) -> None:
+    """Drop what the entry kept in memory."""
+    forget_journal(hass, entry.entry_id)

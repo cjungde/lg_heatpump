@@ -187,6 +187,16 @@ diagnostics attached.
 device page and open an issue. The dump contains the raw, undecoded register map,
 which is what makes a scaling or address bug fixable.
 
+**Something went wrong a while ago.** The same download carries a **journal**
+that is always on: the last 2000 Modbus requests (function, address, duration,
+outcome; values only for writes), the last 1000 polls (duration, which
+sub-systems failed and why) and the last 300 events worth keeping longer
+(setups, sub-systems failing and recovering, timeouts, link errors, writes).
+Nothing has to be switched on beforehand, and it does not fill the Home
+Assistant log. It is kept in memory: a reload of the entry keeps it, a restart
+of Home Assistant starts it afresh. At a 10-second interval the requests reach
+back roughly an hour, the polls a few hours, the events much longer.
+
 To collect logs, add this to `configuration.yaml`:
 
 ```yaml
