@@ -127,6 +127,29 @@ Home Assistant is reflected as soon as the heat pump has taken it.
 Each sub-system reads only its own registers. One block the heat pump refuses
 makes only that sub-system's entities unavailable; the rest keep updating.
 
+### Options
+
+**Configure** on the integration offers:
+
+- **Oil return pulse (ORP) detection** (off by default) and **warning before an ORP**
+  (30 to 600 s, default 180 s). See below.
+
+### Oil return pulse (ORP) triggers
+
+Every so often the unit runs the compressor up to 60 Hz for about a minute to return
+oil, after 60.5 minutes of uninterrupted running at or below 25 Hz: the oil return
+pulse (ORP), also called flush pulse. With the option on, the integration offers two
+device triggers, **Before an ORP** (the warning lead time before it) and **After an
+ORP**, for use in automations. What to do at those
+moments, for example raising the flow temperature, is up to you: the integration only
+says when. "After" also fires when an announced pulse did not come (the compressor
+stopped, defrosted or did not ramp); its event data then carries `completed: false`, so
+whatever an automation did on "before" can always be undone.
+
+The 60.5 minute trigger is measured on one unit, which is why the option is off by
+default. Replaying 48 recorded hours (31 pulses) at the 10-second measurement interval
+found all 31.
+
 ## Troubleshooting
 
 **The entry never finishes setting up.** The heat pump is not answering. Check

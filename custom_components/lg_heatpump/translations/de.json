@@ -261,5 +261,25 @@
     "no_component_answered": {
       "message": "Die Wärmepumpe hat auf keines der gelesenen Register geantwortet."
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "data": {
+          "oil_return_pulse": "Erkennung Ölrückführungspuls (ORP)",
+          "oil_return_pulse_lead_seconds": "Wie früh der Trigger „Vor einem ORP“ auslöst (Sekunden)"
+        },
+        "data_description": {
+          "oil_return_pulse": "Erkennt den Ölrückführungspuls des Verdichters (ORP, auch Spülpuls) und bietet die Geräte-Trigger „Vor einem ORP“ und „Nach einem ORP“ an. Der Auslöser (60,5 Minuten ununterbrochen bei höchstens 25 Hz) ist an einem Gerät gemessen, deshalb standardmäßig aus.",
+          "oil_return_pulse_lead_seconds": "Der Verdichter fährt in etwa 50 Sekunden hoch, zu kurz, um zu reagieren. Der Standard von 180 Sekunden lässt Zeit, vorher auf das Gerät zu schreiben."
+        }
+      }
+    }
+  },
+  "device_automation": {
+    "trigger_type": {
+      "orp_imminent": "Vor einem Ölrückführungspuls (ORP)",
+      "orp_finished": "Nach einem Ölrückführungspuls (ORP)"
+    }
   }
 }

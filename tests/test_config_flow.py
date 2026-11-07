@@ -6,17 +6,20 @@ from typing import TYPE_CHECKING
 from unittest.mock import patch
 
 from modbus_connection import ModbusTimeoutError
+import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.lg_heatpump.const import (
     CONF_DEBUG,
     CONF_MODEL,
+    CONF_ORP,
+    CONF_ORP_LEAD,
     CONF_UNIT_ID,
     DOMAIN,
 )
 from homeassistant.config_entries import SOURCE_USER
 from homeassistant.const import CONF_HOST, CONF_PORT
-from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.data_entry_flow import FlowResultType, InvalidData
 
 from . import MOCK_HOST, MOCK_PORT, MOCK_UNIT_ID, MOCK_USER_INPUT
 
@@ -154,3 +157,36 @@ async def test_reconfigure_flow_cannot_connect(
     assert result["type"] is FlowResultType.FORM
     assert result["errors"] == {"base": "cannot_connect"}
     assert init_integration.data[CONF_HOST] == MOCK_HOST
+
+
+async def test_options_flow_stores_the_orp_choice(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+) -> None:
+    """The options flow stores the ORP choice and reloads the entry with it."""
+    result = await hass.config_entries.options.async_init(init_integration.entry_id)
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "init"
+    assert set(result["data_schema"].schema) == {CONF_ORP, CONF_ORP_LEAD}
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_ORP: True}
+    )
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert init_integration.options == {CONF_ORP: True, CONF_ORP_LEAD: 180}
+    assert init_integration.runtime_data.readings.oil_return_pulse is not None
+
+
+async def test_options_flow_rejects_a_lead_out_of_range(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+) -> None:
+    """A warning lead below the minimum is refused by the form."""
+    result = await hass.config_entries.options.async_init(init_integration.entry_id)
+
+    with pytest.raises(InvalidData):
+        await hass.config_entries.options.async_configure(
+            result["flow_id"], {CONF_ORP: True, CONF_ORP_LEAD: 1}
+        )

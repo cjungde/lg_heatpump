@@ -12,6 +12,8 @@ LOGGER: Final = logging.getLogger(__package__)
 CONF_UNIT_ID: Final = "unit_id"
 CONF_MODEL: Final = "model"
 CONF_DEBUG: Final = "debug"
+CONF_ORP: Final = "oil_return_pulse"
+CONF_ORP_LEAD: Final = "oil_return_pulse_lead_seconds"
 
 DEFAULT_PORT: Final = 502
 DEFAULT_UNIT_ID: Final = 1
@@ -22,3 +24,13 @@ MANUFACTURER: Final = "LG"
 # measurements often and the setpoints rarely.
 SCAN_INTERVAL: Final = timedelta(seconds=10)
 SETTINGS_SCAN_INTERVAL: Final = timedelta(seconds=60)
+
+# The oil return pulse (ORP): the tracker is off unless asked for, because the
+# 60.5 minute trigger is measured on one unit. The warning goes out this long
+# before the pulse; the ramp itself (about 50 s) is too short to act on.
+DEFAULT_ORP_LEAD: Final = 180
+MIN_ORP_LEAD: Final = 30
+MAX_ORP_LEAD: Final = 600
+
+# One bus event carries both device triggers, told apart by its ``type``.
+EVENT_ORP: Final = f"{DOMAIN}_event"

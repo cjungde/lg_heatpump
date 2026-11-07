@@ -17,12 +17,16 @@ from .connection import create_modbus_params
 from .const import (
     CONF_DEBUG,
     CONF_MODEL,
+    CONF_ORP,
+    CONF_ORP_LEAD,
     CONF_UNIT_ID,
+    DEFAULT_ORP_LEAD,
     SCAN_INTERVAL,
     SETTINGS_SCAN_INTERVAL,
 )
 from .coordinator import LgHeatPumpCoordinator, LgHeatPumpRuntimeData
 from .lg_heatpump_modbus import LgHeatPump
+from .lg_heatpump_modbus.logic import OilReturnPulseConfig, OilReturnPulseTracker
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -61,6 +65,12 @@ async def async_setup_entry(
     readings = LgHeatPumpCoordinator(
         hass, entry, device, device.async_update_readings, SCAN_INTERVAL
     )
+    if entry.options.get(CONF_ORP, False):
+        readings.oil_return_pulse = OilReturnPulseTracker(
+            config=OilReturnPulseConfig(
+                lead_seconds=entry.options.get(CONF_ORP_LEAD, DEFAULT_ORP_LEAD)
+            )
+        )
     settings = LgHeatPumpCoordinator(
         hass, entry, device, device.async_update_settings, SETTINGS_SCAN_INTERVAL
     )
