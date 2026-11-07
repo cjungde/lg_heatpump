@@ -1,5 +1,7 @@
 """Tests for the optional limits: probed once, remembered, polled only where served."""
 
+from unittest.mock import patch
+
 from modbus_connection import (
     IllegalDataAddressError,
     ModbusConnectionError,
@@ -557,3 +559,51 @@ async def test_a_probe_running_into_a_recheck_does_not_store_its_answer(
 
     assert _stored(hass_storage, mock_config_entry) == RECHECK_RECORD
     assert mock_config_entry.runtime_data.optional_registers.support == {}
+
+
+# --- a lost or unwritable store only costs probes -----------------------------
+
+STORE_CLASS = "homeassistant.helpers.storage.Store"
+
+
+@pytest.mark.usefixtures("patched_connection")
+async def test_an_unreadable_store_means_asking_again(
+    hass: HomeAssistant,
+    mock_unit: MockModbusUnit,
+    mock_config_entry: MockConfigEntry,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A store that cannot be read is treated as empty, not as a failed setup."""
+    _silence(mock_unit, "compressor_modulation_limit")
+    with patch(f"{STORE_CLASS}.async_load", side_effect=OSError("disk")):
+        await _setup(hass, mock_config_entry)
+
+    assert mock_config_entry.state is ConfigEntryState.LOADED
+    assert "cannot read the stored optional registers" in caplog.text
+    assert hass.states.get(SENSOR).attributes["source"] == "miss"
+    mock_unit.read_events.clear()
+    await _poll_settings(hass, mock_config_entry)
+    assert _limit_reads(mock_unit) == [("holding", 23)]
+
+
+@pytest.mark.usefixtures("patched_connection")
+async def test_an_unwritable_store_keeps_the_answer_for_this_run(
+    hass: HomeAssistant,
+    mock_unit: MockModbusUnit,
+    mock_config_entry: MockConfigEntry,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A failed save is logged; the answer still holds until the next start."""
+    _silence(mock_unit, "compressor_modulation_limit")
+    await _setup(hass, mock_config_entry)
+
+    with patch(f"{STORE_CLASS}.async_save", side_effect=OSError("disk full")):
+        await _poll_settings(hass, mock_config_entry)
+
+    assert "cannot store the optional registers" in caplog.text
+    state = hass.states.get(SENSOR)
+    assert state.attributes["compressor_modulation_limit"] is False
+    assert state.attributes["source"] == "probed"
+    mock_unit.read_events.clear()
+    await _poll_settings(hass, mock_config_entry)
+    assert ("holding", 23) not in _limit_reads(mock_unit)
