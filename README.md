@@ -115,6 +115,23 @@ Home Assistant is reflected as soon as the heat pump has taken it.
 Each sub-system reads only its own registers. One block the heat pump refuses
 makes only that sub-system's entities unavailable; the rest keep updating.
 
+### Optional limits
+
+Some units serve a maximum compressor modulation (holding 23), a power limit
+(holding 24) and a switch that makes the unit obey it (coil 6); others serve none
+of them. A unit does not refuse an address it lacks, it does not answer, so every
+read of one costs a full request timeout.
+
+The integration therefore asks once per register, one per settings poll and only
+after that poll answered in full, and remembers the answer. A unit serving none
+of them costs three timeouts once, spread over three polls. A register found
+served gets its entity after a reload; **these entities are disabled by default**,
+because they limit what the heat pump may draw. The diagnostic sensor
+**Optional registers** shows each verdict and where it came from.
+
+The answers are kept for the same unit only: if the unit reports a different
+identity (input 9997/9998), they are asked again.
+
 ## Troubleshooting
 
 **The entry never finishes setting up.** The heat pump is not answering. Check

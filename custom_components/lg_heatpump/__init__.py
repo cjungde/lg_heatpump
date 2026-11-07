@@ -23,6 +23,7 @@ from .const import (
 )
 from .coordinator import LgHeatPumpCoordinator, LgHeatPumpRuntimeData
 from .lg_heatpump_modbus import LgHeatPump
+from .optional_registers import OptionalRegisters
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -66,11 +67,19 @@ async def async_setup_entry(
     )
 
     await readings.async_config_entry_first_refresh()
+    # The first readings poll read the unit's identity, which decides whether the
+    # stored answers about the optional limits still apply. Restored before the
+    # first settings poll, so served limits are read with it.
+    optional = OptionalRegisters(hass, entry)
+    await optional.async_restore(device)
+    settings.optional_registers = optional
     await settings.async_config_entry_first_refresh()
 
-    entry.runtime_data = LgHeatPumpRuntimeData(device, readings, settings)
+    entry.runtime_data = LgHeatPumpRuntimeData(device, readings, settings, optional)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    # Probing starts with the next settings poll, never during setup.
+    optional.armed = True
     return True
 
 
