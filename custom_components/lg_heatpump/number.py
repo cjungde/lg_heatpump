@@ -125,9 +125,8 @@ class LgHeatPumpNumber(LgHeatPumpEntity, NumberEntity):
     async def async_set_native_value(self, value: float) -> None:
         """Write a new value and refresh so the state follows the device."""
         try:
-            await self._subsystem.write(
-                self.entity_description.attribute,
-                self.entity_description.to_device(value),
+            await self._async_write_and_refresh(
+                self.entity_description.to_device(value)
             )
         except LgValueValidationError as error:
             raise ServiceValidationError(
@@ -135,4 +134,3 @@ class LgHeatPumpNumber(LgHeatPumpEntity, NumberEntity):
                 translation_key="invalid_value",
                 translation_placeholders={"error": str(error)},
             ) from error
-        await self.coordinator.async_request_refresh()
