@@ -14,6 +14,7 @@ from custom_components.lg_heatpump.const import (
     CONF_MODEL,
     CONF_ORP,
     CONF_ORP_LEAD,
+    CONF_ORP_LEARN,
     CONF_UNIT_ID,
     DOMAIN,
 )
@@ -167,7 +168,11 @@ async def test_options_flow_stores_the_orp_choice(
     result = await hass.config_entries.options.async_init(init_integration.entry_id)
     assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "init"
-    assert set(result["data_schema"].schema) == {CONF_ORP, CONF_ORP_LEAD}
+    assert set(result["data_schema"].schema) == {
+        CONF_ORP,
+        CONF_ORP_LEAD,
+        CONF_ORP_LEARN,
+    }
 
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], {CONF_ORP: True}
@@ -175,8 +180,32 @@ async def test_options_flow_stores_the_orp_choice(
     await hass.async_block_till_done(wait_background_tasks=True)
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert init_integration.options == {CONF_ORP: True, CONF_ORP_LEAD: 180}
-    assert init_integration.runtime_data.readings.oil_return_pulse is not None
+    assert init_integration.options == {
+        CONF_ORP: True,
+        CONF_ORP_LEAD: 180,
+        CONF_ORP_LEARN: False,
+    }
+    tracker = init_integration.runtime_data.readings.oil_return_pulse
+    assert tracker is not None
+    assert tracker.config.learn_trigger is False
+
+
+async def test_options_flow_turns_on_learning(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+) -> None:
+    """Learning the trigger is an opt-in and reaches the tracker."""
+    result = await hass.config_entries.options.async_init(init_integration.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_ORP: True, CONF_ORP_LEAD: 60, CONF_ORP_LEARN: True}
+    )
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    tracker = init_integration.runtime_data.readings.oil_return_pulse
+    assert tracker is not None
+    assert tracker.config.learn_trigger is True
+    assert tracker.config.lead_seconds == 60
 
 
 async def test_options_flow_rejects_a_lead_out_of_range(

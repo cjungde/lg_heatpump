@@ -316,11 +316,13 @@
       "init": {
         "data": {
           "oil_return_pulse": "Oil return pulse (ORP) detection",
-          "oil_return_pulse_lead_seconds": "Warning before an ORP (seconds)"
+          "oil_return_pulse_lead_seconds": "Warning before an ORP (seconds)",
+          "oil_return_pulse_learn_trigger": "Learn the ORP trigger from recent pulses"
         },
         "data_description": {
           "oil_return_pulse": "Detects the compressor's oil return pulse (ORP, also called flush pulse) and offers the device triggers \"Before an ORP\" and \"After an ORP\". The trigger (60.5 minutes of uninterrupted running at or below 25 Hz) is measured on one unit, so it is off by default.",
-          "oil_return_pulse_lead_seconds": "The compressor ramps up over about 50 seconds, which is too short to react to. The default of 180 s leaves time to write to the machine first."
+          "oil_return_pulse_lead_seconds": "The compressor ramps up over about 50 seconds, which is too short to react to. The default of 180 s leaves time to write to the machine first.",
+          "oil_return_pulse_learn_trigger": "Expect the next ORP after the median running time of the last five pulses instead of the fixed 60.5 minutes, once three pulses were seen. Use it when the warning comes too late on your unit. The learned value starts over after a restart."
         }
       }
     }

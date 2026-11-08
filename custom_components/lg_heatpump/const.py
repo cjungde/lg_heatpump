@@ -14,6 +14,7 @@ CONF_MODEL: Final = "model"
 CONF_DEBUG: Final = "debug"
 CONF_ORP: Final = "oil_return_pulse"
 CONF_ORP_LEAD: Final = "oil_return_pulse_lead_seconds"
+CONF_ORP_LEARN: Final = "oil_return_pulse_learn_trigger"
 
 DEFAULT_PORT: Final = 502
 DEFAULT_UNIT_ID: Final = 1
