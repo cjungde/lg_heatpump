@@ -14,7 +14,13 @@ from pytest_homeassistant_custom_component.common import (
     async_mock_service,
 )
 
-from custom_components.lg_heatpump.const import CONF_ORP, DOMAIN, EVENT_ORP
+from custom_components.lg_heatpump.const import (
+    CONF_ORP,
+    CONF_ORP_LEAD,
+    CONF_ORP_LEARN,
+    DOMAIN,
+    EVENT_ORP,
+)
 from custom_components.lg_heatpump.lg_heatpump_modbus.logic import (
     EVENT_FINISHED,
     EVENT_IMMINENT,
@@ -41,10 +47,18 @@ class _Clock:
         return self.now
 
 
-async def _setup(hass: HomeAssistant, entry: MockConfigEntry, *, enabled: bool) -> None:
+async def _setup(
+    hass: HomeAssistant,
+    entry: MockConfigEntry,
+    *,
+    enabled: bool,
+    options: dict | None = None,
+) -> None:
     entry.add_to_hass(hass)
     if enabled:
-        hass.config_entries.async_update_entry(entry, options={CONF_ORP: True})
+        hass.config_entries.async_update_entry(
+            entry, options={CONF_ORP: True, **(options or {})}
+        )
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done(wait_background_tasks=True)
 
@@ -134,6 +148,7 @@ async def test_a_pulse_fires_a_warning_and_an_all_clear(
     assert finished["peak_rpm"] == 3600
     assert 59 <= finished["runtime_minutes"] <= 61
     assert 20 <= finished["duration_seconds"] <= 70
+    assert warning["trigger_minutes"] == 60.5
     journal = mock_config_entry.runtime_data.journal
     orp = [e for e in journal.events if e["event"] == "orp"]
     assert [e["trigger"] for e in orp] == [EVENT_IMMINENT, EVENT_FINISHED]
@@ -255,3 +270,73 @@ async def test_a_failed_read_is_not_an_observation(
             mock_unit.fail_read(0, None, register_type="input")
             await _poll(hass, mock_config_entry, clock, mock_unit, LOW_LOAD_HZ)
             assert spy.call_args.args[1] == 1500
+
+
+async def _stop(
+    hass: HomeAssistant,
+    entry: MockConfigEntry,
+    clock: _Clock,
+    unit: MockModbusUnit,
+) -> None:
+    """Stop the compressor between runs, so every run starts its clock afresh."""
+    await _poll(hass, entry, clock, unit, 0)
+
+
+async def test_a_learned_trigger_warns_earlier(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_unit: MockModbusUnit,
+    patched_connection: None,
+) -> None:
+    """After three pulses at about 60 min the fourth warning comes earlier."""
+    clock = _Clock()
+    events = async_capture_events(hass, EVENT_ORP)
+    with patch(CLOCK, clock):
+        await _setup(
+            hass,
+            mock_config_entry,
+            enabled=True,
+            options={CONF_ORP_LEAD: 60, CONF_ORP_LEARN: True},
+        )
+        for _ in range(3):
+            await _run_a_pulse(hass, mock_config_entry, clock, mock_unit)
+            await _stop(hass, mock_config_entry, clock, mock_unit)
+
+        tracker = mock_config_entry.runtime_data.readings.oil_return_pulse
+        assert tracker is not None
+        learned = tracker.learned_trigger_minutes
+        assert learned is not None
+        assert 59.9 <= learned <= 60.2
+
+        events.clear()
+        started = clock.now
+        for _ in range(360):
+            await _poll(hass, mock_config_entry, clock, mock_unit, LOW_LOAD_HZ)
+            if events:
+                break
+
+    (warning,) = (e.data for e in events)
+    assert warning["type"] == "orp_imminent"
+    assert warning["trigger_minutes"] == round(learned, 2)
+    warned_after = (clock.now - started).total_seconds() / 60
+    assert warned_after <= learned - 1 + 1 / 6
+    assert warned_after < 59.5  # where the fixed 60.5 would have warned
+
+
+async def test_without_the_option_nothing_is_learned(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_unit: MockModbusUnit,
+    patched_connection: None,
+) -> None:
+    """Without the option the fixed trigger stays, however many pulses pass."""
+    clock = _Clock()
+    with patch(CLOCK, clock):
+        await _setup(hass, mock_config_entry, enabled=True)
+        for _ in range(3):
+            await _run_a_pulse(hass, mock_config_entry, clock, mock_unit)
+            await _stop(hass, mock_config_entry, clock, mock_unit)
+    tracker = mock_config_entry.runtime_data.readings.oil_return_pulse
+    assert tracker is not None
+    assert tracker.learned_trigger_minutes is None
+    assert tracker.trigger_minutes == 60.5

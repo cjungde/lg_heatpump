@@ -34,6 +34,7 @@ from .const import (
     CONF_MODEL,
     CONF_ORP,
     CONF_ORP_LEAD,
+    CONF_ORP_LEARN,
     CONF_UNIT_ID,
     DEFAULT_ORP_LEAD,
     DEFAULT_PORT,
@@ -127,6 +128,7 @@ class LgHeatPumpOptionsFlow(OptionsFlowWithReload):
                             ),
                             vol.Coerce(int),
                         ),
+                        vol.Required(CONF_ORP_LEARN, default=False): BooleanSelector(),
                     }
                 ),
                 self.config_entry.options,

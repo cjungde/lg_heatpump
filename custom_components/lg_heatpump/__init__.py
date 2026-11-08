@@ -19,6 +19,7 @@ from .const import (
     CONF_MODEL,
     CONF_ORP,
     CONF_ORP_LEAD,
+    CONF_ORP_LEARN,
     CONF_UNIT_ID,
     DEFAULT_ORP_LEAD,
     LOGGER,
@@ -84,7 +85,8 @@ async def async_setup_entry(
     if entry.options.get(CONF_ORP, False):
         readings.oil_return_pulse = OilReturnPulseTracker(
             config=OilReturnPulseConfig(
-                lead_seconds=entry.options.get(CONF_ORP_LEAD, DEFAULT_ORP_LEAD)
+                lead_seconds=entry.options.get(CONF_ORP_LEAD, DEFAULT_ORP_LEAD),
+                learn_trigger=entry.options.get(CONF_ORP_LEARN, False),
             )
         )
     settings = LgHeatPumpCoordinator(

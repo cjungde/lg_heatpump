@@ -186,6 +186,7 @@ class LgHeatPumpCoordinator(DataUpdateCoordinator[UpdateReport]):
                         record.runtime_minutes if record else tracker.runtime_minutes
                     ),
                     "expected_at": expected.isoformat() if expected else None,
+                    "trigger_minutes": round(tracker.trigger_minutes, 2),
                     "peak_rpm": record.peak_rpm if record else None,
                     "duration_seconds": (
                         round(record.duration_seconds, 1) if record else None
