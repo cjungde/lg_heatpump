@@ -32,7 +32,7 @@ Currently, this Marketplace (HACS) integration is the recommended way.
 | :------- | :------- |
 | `climate` | One thermostat per water circuit, following the heat pump's own control method |
 | `water_heater` | The domestic hot water tank |
-| `sensor` | Temperatures, pressures, flow rate, compressor speed, error code, energy state; plus two debug sensors (disabled by default) with the time of the last measurement and settings poll |
+| `sensor` | Temperatures, pressures, flow rate (0 while the water pump is off), compressor speed, error code, energy state; plus three diagnostic sensors (disabled by default): the time of the last measurement and settings poll, and the flow rate as the unit reports it |
 | `binary_sensor` | Compressor, pumps, defrost, backup heater, disinfection, fault flags; plus two debug sensors (disabled by default) that turn on when a measurement or settings poll failed, fully or in part |
 | `button` | Refresh data now: polls the measurements and the settings immediately, outside the regular schedule |
 | `switch` | Power, silent mode, disinfection |
