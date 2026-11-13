@@ -31,7 +31,8 @@ integration must **not** read the heat pump at the same time (see
 | `switch.hp_dhw_desinfection_mode` (coil 3) | Switch **Hot water disinfection** |
 | `binary_sensor.hp_*_status` (discrete inputs) | Binary sensors (diagnostic, some disabled by default) |
 | `sensor.hp_*` temperatures, pressures, flow rate, compressor | Sensors of the same meaning (some disabled by default) |
-| `hp_power_limit`, `hp_energy_state_select`, emergency stop switches | Not provided (the energy state is a read-only sensor) |
+| `hp_power_limit` | Number **Power limit** and switch **Power limit enable**, only on units that serve holding 24 and coil 6, disabled by default (see "Optional limits" in the README) |
+| `hp_energy_state_select`, emergency stop switches | Not provided (the energy state is a read-only sensor) |
 | `*_raw` helper sensors | Not needed |
 
 Note the changed units: compressor speed is `rpm`, flow rate `L/min`, pressure `bar`.
