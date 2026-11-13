@@ -31,6 +31,7 @@ integration must **not** read the heat pump at the same time (see
 | `switch.hp_dhw_desinfection_mode` (coil 3) | Switch **Hot water disinfection** |
 | `binary_sensor.hp_*_status` (discrete inputs) | Binary sensors (diagnostic, some disabled by default) |
 | `sensor.hp_*` temperatures, pressures, flow rate, compressor | Sensors of the same meaning (some disabled by default) |
+| `sensor.hp_flow_rate` | Sensor **Water flow rate**, but it reads 0 while the water pump is off; the value as the unit reports it is the diagnostic sensor **Water flow rate (raw)**. Pick the one whose statistics you want to continue |
 | `hp_power_limit`, `hp_energy_state_select`, emergency stop switches | Not provided (the energy state is a read-only sensor) |
 | `*_raw` helper sensors | Not needed |
 
